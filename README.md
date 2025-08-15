@@ -35,7 +35,7 @@ A modern WordPress Gutenberg block for embedding YouTube and Vimeo videos with c
 ### Shortcode Usage
 
 ```php
-[ekwa_video 
+[ekwa_video
     video_url="https://www.youtube.com/watch?v=VIDEO_ID"
     show_title="true"
     show_description="false"

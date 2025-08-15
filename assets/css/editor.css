@@ -195,29 +195,29 @@
     .ekwa-video-placeholder {
         padding: 40px 15px;
     }
-    
+
     .ekwa-video-placeholder h3 {
         font-size: 16px;
     }
-    
+
     .ekwa-video-placeholder p {
         font-size: 13px;
     }
-    
+
     .ekwa-video-preview .ekwa-video-title {
         font-size: 1.1em;
         padding: 12px 12px 0 12px;
     }
-    
+
     .ekwa-video-preview .ekwa-video-description {
         padding: 12px;
     }
-    
+
     .ekwa-video-play-overlay {
         width: 56px;
         height: 40px;
     }
-    
+
     .ekwa-video-duration-preview {
         bottom: 8px;
         right: 8px;
@@ -332,24 +332,24 @@
         border-color: #007cba;
         color: #cccccc;
     }
-    
+
     .ekwa-video-placeholder h3 {
         color: #ffffff;
     }
-    
+
     .ekwa-video-preview {
         background: #1e1e1e;
     }
-    
+
     .ekwa-video-preview .ekwa-video-title {
         color: #ffffff;
     }
-    
+
     .ekwa-video-preview .ekwa-video-description {
         background: #2d2d2d;
         border-top-color: #444;
     }
-    
+
     .ekwa-video-preview .ekwa-video-description p {
         color: #cccccc;
     }

@@ -2,7 +2,7 @@
 
 ## Installation Steps
 
-1. **Upload the plugin**: 
+1. **Upload the plugin**:
    - Copy the entire `ekwa-video-block` folder to your WordPress `/wp-content/plugins/` directory
 
 2. **Activate the plugin**:

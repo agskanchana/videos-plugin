@@ -29,7 +29,7 @@ define('EKWA_VIDEO_BLOCK_PLUGIN_PATH', plugin_dir_path(__FILE__));
  * Main plugin class
  */
 class EkwaVideoBlock {
-    
+
     /**
      * Constructor
      */
@@ -39,24 +39,24 @@ class EkwaVideoBlock {
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
     }
-    
+
     /**
      * Initialize the plugin
      */
     public function init() {
         // Load text domain
         load_plugin_textdomain('ekwa-video-block', false, dirname(plugin_basename(__FILE__)) . '/languages');
-        
+
         // Register the block
         $this->register_block();
-        
+
         // Register shortcode
         add_shortcode('ekwa_video', array($this, 'render_video_shortcode'));
-        
+
         // Enqueue block editor assets
         add_action('enqueue_block_editor_assets', array($this, 'enqueue_block_editor_assets'));
     }
-    
+
     /**
      * Register the Gutenberg block
      */
@@ -128,7 +128,7 @@ class EkwaVideoBlock {
             ),
         ));
     }
-    
+
     /**
      * Render the block (server-side rendering)
      */
@@ -148,7 +148,7 @@ class EkwaVideoBlock {
         $show_description = isset($attributes['showDescription']) ? $attributes['showDescription'] : false;
         $autoplay = isset($attributes['autoplay']) ? $attributes['autoplay'] : false;
         $class_name = isset($attributes['className']) ? $attributes['className'] : '';
-        
+
         // Build shortcode attributes
         $shortcode_atts = array(
             'video_url' => $video_url,
@@ -165,17 +165,17 @@ class EkwaVideoBlock {
             'autoplay' => $autoplay ? 'true' : 'false',
             'class_name' => $class_name,
         );
-        
+
         // Add custom thumbnail if exists
         if (!empty($custom_thumbnail) && isset($custom_thumbnail['url'])) {
             $shortcode_atts['custom_thumbnail'] = $custom_thumbnail['url'];
             $shortcode_atts['custom_thumbnail_alt'] = isset($custom_thumbnail['alt']) ? $custom_thumbnail['alt'] : '';
         }
-        
+
         // Render using shortcode
         return $this->render_video_shortcode($shortcode_atts);
     }
-    
+
     /**
      * Render video shortcode
      */
@@ -197,18 +197,18 @@ class EkwaVideoBlock {
             'autoplay' => 'false',
             'class_name' => '',
         ), $atts, 'ekwa_video');
-        
+
         // If no video URL, return empty
         if (empty($attributes['video_url'])) {
             return '';
         }
-        
+
         // Extract video information if not provided
         if (empty($attributes['video_type']) || empty($attributes['video_id'])) {
             $video_info = $this->extract_video_info($attributes['video_url']);
             $attributes = array_merge($attributes, $video_info);
         }
-        
+
         // Get video metadata if not provided
         if (empty($attributes['video_title']) || empty($attributes['thumbnail_url'])) {
             $metadata = $this->get_video_metadata($attributes['video_type'], $attributes['video_id']);
@@ -216,30 +216,30 @@ class EkwaVideoBlock {
                 $attributes = array_merge($attributes, $metadata);
             }
         }
-        
+
         // Use custom thumbnail if provided, otherwise use video thumbnail
         $thumbnail_url = !empty($attributes['custom_thumbnail']) ? $attributes['custom_thumbnail'] : $attributes['thumbnail_url'];
         $thumbnail_alt = !empty($attributes['custom_thumbnail_alt']) ? $attributes['custom_thumbnail_alt'] : $attributes['video_title'];
-        
+
         // Generate unique ID for this video instance
         $unique_id = 'ekwa-video-' . md5($attributes['video_url'] . time());
-        
+
         // Build CSS classes
         $css_classes = array('ekwa-video-wrapper');
         if (!empty($attributes['class_name'])) {
             $css_classes[] = $attributes['class_name'];
         }
         $css_classes[] = 'ekwa-video-' . $attributes['video_type'];
-        
+
         // Start output buffering
         ob_start();
         ?>
         <div class="<?php echo esc_attr(implode(' ', $css_classes)); ?>" id="<?php echo esc_attr($unique_id); ?>">
-            
+
             <?php if ($attributes['show_title'] === 'true' && !empty($attributes['video_title'])): ?>
                 <h3 class="ekwa-video-title"><?php echo esc_html($attributes['video_title']); ?></h3>
             <?php endif; ?>
-            
+
             <div class="ekwa-video-player" data-video-type="<?php echo esc_attr($attributes['video_type']); ?>" data-video-id="<?php echo esc_attr($attributes['video_id']); ?>" data-autoplay="<?php echo esc_attr($attributes['autoplay']); ?>">
                 <?php if (!empty($thumbnail_url)): ?>
                     <div class="ekwa-video-thumbnail" data-embed-url="<?php echo esc_attr($attributes['embed_url']); ?>">
@@ -259,16 +259,16 @@ class EkwaVideoBlock {
                         <p><?php _e('Video thumbnail not available', 'ekwa-video-block'); ?></p>
                     </div>
                 <?php endif; ?>
-                
+
                 <div class="ekwa-video-iframe-container" style="display: none;"></div>
             </div>
-            
+
             <?php if ($attributes['show_description'] === 'true' && !empty($attributes['video_description'])): ?>
                 <div class="ekwa-video-description">
                     <p><?php echo esc_html($attributes['video_description']); ?></p>
                 </div>
             <?php endif; ?>
-            
+
             <!-- Schema.org structured data -->
             <script type="application/ld+json">
             {
@@ -289,10 +289,10 @@ class EkwaVideoBlock {
             </script>
         </div>
         <?php
-        
+
         return ob_get_clean();
     }
-    
+
     /**
      * Extract video information from URL
      */
@@ -302,7 +302,7 @@ class EkwaVideoBlock {
             'video_id' => '',
             'embed_url' => '',
         );
-        
+
         // YouTube URL patterns
         if (preg_match('/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/', $url, $matches)) {
             $info['video_type'] = 'youtube';
@@ -315,10 +315,10 @@ class EkwaVideoBlock {
             $info['video_id'] = $matches[1];
             $info['embed_url'] = 'https://player.vimeo.com/video/' . $matches[1];
         }
-        
+
         return $info;
     }
-    
+
     /**
      * Get video metadata from API
      */
@@ -326,18 +326,18 @@ class EkwaVideoBlock {
         if (empty($video_type) || empty($video_id)) {
             return false;
         }
-        
+
         $metadata = array();
-        
+
         if ($video_type === 'youtube') {
             $metadata = $this->get_youtube_metadata($video_id);
         } elseif ($video_type === 'vimeo') {
             $metadata = $this->get_vimeo_metadata($video_id);
         }
-        
+
         return $metadata;
     }
-    
+
     /**
      * Get YouTube video metadata
      */
@@ -352,13 +352,13 @@ class EkwaVideoBlock {
             'thumbnail_url' => 'https://img.youtube.com/vi/' . $video_id . '/maxresdefault.jpg',
         );
     }
-    
+
     /**
      * Get Vimeo video metadata
      */
     private function get_vimeo_metadata($video_id) {
         $response = wp_remote_get("https://vimeo.com/api/oembed.json?url=https://vimeo.com/{$video_id}");
-        
+
         if (is_wp_error($response)) {
             return array(
                 'thumbnail_url' => '',
@@ -368,10 +368,10 @@ class EkwaVideoBlock {
                 'upload_date' => '',
             );
         }
-        
+
         $body = wp_remote_retrieve_body($response);
         $data = json_decode($body, true);
-        
+
         if (!$data) {
             return array(
                 'thumbnail_url' => '',
@@ -381,7 +381,7 @@ class EkwaVideoBlock {
                 'upload_date' => '',
             );
         }
-        
+
         return array(
             'video_title' => isset($data['title']) ? $data['title'] : '',
             'video_description' => isset($data['description']) ? $data['description'] : '',
@@ -390,7 +390,7 @@ class EkwaVideoBlock {
             'thumbnail_url' => isset($data['thumbnail_url']) ? $data['thumbnail_url'] : '',
         );
     }
-    
+
     /**
      * Convert seconds to ISO 8601 duration format
      */
@@ -398,15 +398,15 @@ class EkwaVideoBlock {
         $hours = floor($seconds / 3600);
         $minutes = floor(($seconds % 3600) / 60);
         $seconds = $seconds % 60;
-        
+
         $duration = 'PT';
         if ($hours > 0) $duration .= $hours . 'H';
         if ($minutes > 0) $duration .= $minutes . 'M';
         if ($seconds > 0) $duration .= $seconds . 'S';
-        
+
         return $duration;
     }
-    
+
     /**
      * Format duration for display
      */
@@ -416,17 +416,17 @@ class EkwaVideoBlock {
             $hours = isset($matches[1]) ? (int)$matches[1] : 0;
             $minutes = isset($matches[2]) ? (int)$matches[2] : 0;
             $seconds = isset($matches[3]) ? (int)$matches[3] : 0;
-            
+
             if ($hours > 0) {
                 return sprintf('%d:%02d:%02d', $hours, $minutes, $seconds);
             } else {
                 return sprintf('%d:%02d', $minutes, $seconds);
             }
         }
-        
+
         return $duration;
     }
-    
+
     /**
      * Enqueue block editor assets
      */
@@ -434,25 +434,25 @@ class EkwaVideoBlock {
         wp_enqueue_script(
             'ekwa-video-block-editor',
             EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/js/block.js',
-            array('wp-blocks', 'wp-i18n', 'wp-element', 'wp-components', 'wp-editor'),
+            array('wp-blocks', 'wp-i18n', 'wp-element', 'wp-components', 'wp-block-editor'),
             EKWA_VIDEO_BLOCK_VERSION,
             true
         );
-        
+
         wp_enqueue_style(
             'ekwa-video-block-editor',
             EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/css/editor.css',
             array('wp-edit-blocks'),
             EKWA_VIDEO_BLOCK_VERSION
         );
-        
+
         // Localize script for AJAX
         wp_localize_script('ekwa-video-block-editor', 'ekwaVideoBlock', array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('ekwa_video_block_nonce'),
         ));
     }
-    
+
     /**
      * Enqueue frontend assets
      */
@@ -463,7 +463,7 @@ class EkwaVideoBlock {
             array(),
             EKWA_VIDEO_BLOCK_VERSION
         );
-        
+
         wp_enqueue_script(
             'ekwa-video-block-frontend',
             EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/js/frontend.js',
@@ -472,7 +472,7 @@ class EkwaVideoBlock {
             true
         );
     }
-    
+
     /**
      * Plugin activation
      */
@@ -480,7 +480,7 @@ class EkwaVideoBlock {
         // Flush rewrite rules
         flush_rewrite_rules();
     }
-    
+
     /**
      * Plugin deactivation
      */
@@ -499,24 +499,24 @@ add_action('wp_ajax_nopriv_ekwa_get_video_metadata', 'ekwa_get_video_metadata_aj
 
 function ekwa_get_video_metadata_ajax() {
     check_ajax_referer('ekwa_video_block_nonce', 'nonce');
-    
+
     $video_url = sanitize_url($_POST['video_url']);
-    
+
     if (empty($video_url)) {
         wp_send_json_error('Invalid video URL');
         return;
     }
-    
+
     $plugin = new EkwaVideoBlock();
     $video_info = $plugin->extract_video_info($video_url);
-    
+
     if (empty($video_info['video_type']) || empty($video_info['video_id'])) {
         wp_send_json_error('Could not extract video information');
         return;
     }
-    
+
     $metadata = $plugin->get_video_metadata($video_info['video_type'], $video_info['video_id']);
     $response = array_merge($video_info, $metadata);
-    
+
     wp_send_json_success($response);
 }

@@ -17,7 +17,7 @@ jQuery(document).ready(function($) {
         bindEvents() {
             // Handle thumbnail click
             $(document).on('click', '.ekwa-video-thumbnail', this.handleThumbnailClick.bind(this));
-            
+
             // Handle play button click on loaded videos
             $(document).on('click', '.ekwa-video-play-button', this.handlePlayButtonClick.bind(this));
         }
@@ -40,7 +40,7 @@ jQuery(document).ready(function($) {
             // Build iframe source with autoplay
             let iframeSrc = embedUrl;
             const separator = embedUrl.includes('?') ? '&' : '?';
-            
+
             if (videoType === 'youtube') {
                 iframeSrc += separator + 'autoplay=1&rel=0&modestbranding=1';
             } else if (videoType === 'vimeo') {
@@ -61,10 +61,10 @@ jQuery(document).ready(function($) {
             // Hide thumbnail and show iframe
             $thumbnail.fadeOut(300, function() {
                 $container.html($iframe).show();
-                
+
                 // Add loaded class to player
                 $player.addClass('ekwa-video-loaded');
-                
+
                 // Trigger custom event
                 $player.trigger('ekwaVideoLoaded', {
                     videoType: videoType,
@@ -77,7 +77,7 @@ jQuery(document).ready(function($) {
         handlePlayButtonClick(e) {
             e.preventDefault();
             e.stopPropagation();
-            
+
             // This will bubble up to thumbnail click
             $(e.target).closest('.ekwa-video-thumbnail').trigger('click');
         }
@@ -86,7 +86,7 @@ jQuery(document).ready(function($) {
             // Load YouTube API if not already loaded
             if (!window.YT && !window.ekwaYTLoading) {
                 window.ekwaYTLoading = true;
-                
+
                 const tag = document.createElement('script');
                 tag.src = 'https://www.youtube.com/iframe_api';
                 const firstScriptTag = document.getElementsByTagName('script')[0];
@@ -116,21 +116,21 @@ jQuery(document).ready(function($) {
         // Utility method to format duration
         static formatDuration(duration) {
             if (!duration) return '';
-            
+
             // If it's in ISO 8601 format (PT1M30S), convert it
             const iso8601Match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
             if (iso8601Match) {
                 const hours = parseInt(iso8601Match[1] || 0);
                 const minutes = parseInt(iso8601Match[2] || 0);
                 const seconds = parseInt(iso8601Match[3] || 0);
-                
+
                 if (hours > 0) {
                     return hours + ':' + String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
                 } else {
                     return minutes + ':' + String(seconds).padStart(2, '0');
                 }
             }
-            
+
             return duration;
         }
     }
@@ -167,7 +167,7 @@ jQuery(document).ready(function($) {
                 'video_id': data.videoId
             });
         }
-        
+
         // Custom tracking hook
         $(document).trigger('ekwa_video_analytics', data);
     });
@@ -178,7 +178,7 @@ jQuery(document).ready(function($) {
             const $wrapper = $(this);
             const $player = $wrapper.find('.ekwa-video-player');
             const $iframe = $player.find('iframe');
-            
+
             if ($iframe.length) {
                 const aspectRatio = $iframe.attr('height') / $iframe.attr('width') * 100;
                 $player.css('padding-bottom', aspectRatio + '%');
