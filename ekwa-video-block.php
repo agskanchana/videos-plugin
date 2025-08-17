@@ -627,7 +627,7 @@ class EkwaVideoBlock {
         wp_enqueue_script(
             'ekwa-video-block-frontend',
             EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/js/frontend.js',
-            array('jquery'),
+            array(),
             EKWA_VIDEO_BLOCK_VERSION,
             true
         );

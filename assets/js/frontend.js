@@ -1,8 +1,8 @@
-jQuery(document).ready(function($) {
+document.addEventListener('DOMContentLoaded', function() {
     'use strict';
 
     /**
-     * Ekwa Video Block Frontend JavaScript
+     * Ekwa Video Block Frontend JavaScript - Vanilla JS
      */
     class EkwaVideoPlayer {
         constructor() {
@@ -16,39 +16,57 @@ jQuery(document).ready(function($) {
 
         bindEvents() {
             // Handle thumbnail click
-            $(document).on('click', '.ekwa-video-thumbnail', this.handleThumbnailClick.bind(this));
+            document.addEventListener('click', (e) => {
+                if (e.target.closest('.ekwa-video-thumbnail')) {
+                    this.handleThumbnailClick(e);
+                }
+            });
 
             // Handle play button click on loaded videos
-            $(document).on('click', '.ekwa-video-play-button', this.handlePlayButtonClick.bind(this));
+            document.addEventListener('click', (e) => {
+                if (e.target.closest('.ekwa-video-play-button')) {
+                    this.handlePlayButtonClick(e);
+                }
+            });
 
             // Handle play icon click (for schema markup structure)
-            $(document).on('click', '.playicon', this.handlePlayIconClick.bind(this));
+            document.addEventListener('click', (e) => {
+                if (e.target.closest('.playicon')) {
+                    this.handlePlayIconClick(e);
+                }
+            });
 
             // Handle transcript toggle
-            $(document).on('click', '.btn-transcript', this.handleTranscriptToggle.bind(this));
+            document.addEventListener('click', (e) => {
+                if (e.target.closest('.btn-transcript')) {
+                    this.handleTranscriptToggle(e);
+                }
+            });
         }
 
         handleThumbnailClick(e) {
             e.preventDefault();
-            const $thumbnail = $(e.currentTarget);
+            const thumbnail = e.target.closest('.ekwa-video-thumbnail');
 
             // Support both old and new structure
-            let $player = $thumbnail.closest('.ekwa-video-player');
-            if (!$player.length) {
-                $player = $thumbnail.closest('.player');
+            let player = thumbnail.closest('.ekwa-video-player');
+            if (!player) {
+                player = thumbnail.closest('.player');
             }
 
-            let $container = $player.find('.ekwa-video-iframe-container');
-            if (!$container.length) {
+            let container = player.querySelector('.ekwa-video-iframe-container');
+            if (!container) {
                 // Create container if it doesn't exist
-                $container = $('<div class="ekwa-video-iframe-container" style="display: none;"></div>');
-                $player.append($container);
+                container = document.createElement('div');
+                container.className = 'ekwa-video-iframe-container';
+                container.style.display = 'none';
+                player.appendChild(container);
             }
 
-            const embedUrl = $thumbnail.data('embed-url');
-            let videoType = $player.data('video-type') || $player.data('provider');
-            let videoId = $player.data('video-id') || $player.data('id');
-            const autoplay = $player.data('autoplay');
+            const embedUrl = thumbnail.dataset.embedUrl;
+            let videoType = player.dataset.videoType || player.dataset.provider;
+            let videoId = player.dataset.videoId || player.dataset.id;
+            const autoplay = player.dataset.autoplay;
 
             if (!embedUrl || !videoType || !videoId) {
                 console.error('Missing video data');
@@ -66,47 +84,51 @@ jQuery(document).ready(function($) {
             }
 
             // Create iframe
-            const $iframe = $('<iframe>', {
-                src: iframeSrc,
-                frameborder: '0',
-                allowfullscreen: true,
-                allow: 'autoplay; encrypted-media',
-                width: '100%',
-                height: '100%',
-                class: 'ekwa-video-iframe'
-            });
+            const iframe = document.createElement('iframe');
+            iframe.src = iframeSrc;
+            iframe.frameBorder = '0';
+            iframe.allowFullscreen = true;
+            iframe.allow = 'autoplay; encrypted-media';
+            iframe.width = '100%';
+            iframe.height = '100%';
+            iframe.className = 'ekwa-video-iframe';
 
             // Set proper aspect ratio for container
-            $container.css({
-                'position': 'relative',
-                'width': '100%',
-                'padding-bottom': '56.25%',
-                'height': '0',
-                'background': '#000'
+            Object.assign(container.style, {
+                position: 'relative',
+                width: '100%',
+                paddingBottom: '56.25%',
+                height: '0',
+                background: '#000'
             });
 
-            $iframe.css({
-                'position': 'absolute',
-                'top': '0',
-                'left': '0',
-                'width': '100%',
-                'height': '100%',
-                'border': 'none'
+            Object.assign(iframe.style, {
+                position: 'absolute',
+                top: '0',
+                left: '0',
+                width: '100%',
+                height: '100%',
+                border: 'none'
             });
 
-            // Hide thumbnail and show iframe
-            $thumbnail.fadeOut(300, function() {
-                $container.html($iframe).show();
+            // Hide thumbnail and show iframe with fade effect
+            this.fadeOut(thumbnail, 300, () => {
+                container.innerHTML = '';
+                container.appendChild(iframe);
+                container.style.display = 'block';
 
                 // Add loaded class to player
-                $player.addClass('ekwa-video-loaded');
+                player.classList.add('ekwa-video-loaded');
 
                 // Trigger custom event
-                $player.trigger('ekwaVideoLoaded', {
-                    videoType: videoType,
-                    videoId: videoId,
-                    embedUrl: embedUrl
+                const event = new CustomEvent('ekwaVideoLoaded', {
+                    detail: {
+                        videoType: videoType,
+                        videoId: videoId,
+                        embedUrl: embedUrl
+                    }
                 });
+                player.dispatchEvent(event);
             });
         }
 
@@ -115,35 +137,99 @@ jQuery(document).ready(function($) {
             e.stopPropagation();
 
             // This will bubble up to thumbnail click
-            $(e.target).closest('.ekwa-video-thumbnail').trigger('click');
+            const thumbnail = e.target.closest('.ekwa-video-thumbnail');
+            if (thumbnail) {
+                thumbnail.click();
+            }
         }
 
         handlePlayIconClick(e) {
             e.preventDefault();
-            const $playIcon = $(e.currentTarget);
-            const $thumbnail = $playIcon.closest('.ekwa-video-thumbnail');
+            const playIcon = e.target.closest('.playicon');
+            const thumbnail = playIcon.closest('.ekwa-video-thumbnail');
 
-            if ($thumbnail.length) {
-                $thumbnail.trigger('click');
+            if (thumbnail) {
+                thumbnail.click();
             }
         }
 
         handleTranscriptToggle(e) {
             e.preventDefault();
-            const $button = $(e.currentTarget);
-            const targetId = $button.data('target');
-            const $transcript = $(targetId);
+            const button = e.target.closest('.btn-transcript');
+            const targetId = button.dataset.target;
+            const transcript = document.querySelector(targetId);
 
-            if ($transcript.length) {
-                if ($transcript.hasClass('open')) {
-                    $transcript.removeClass('open').slideUp(300);
-                    $button.text($button.text().replace('Hide', 'Video'));
+            if (transcript) {
+                if (transcript.classList.contains('open')) {
+                    transcript.classList.remove('open');
+                    this.slideUp(transcript, 300);
+                    button.textContent = button.textContent.replace('Hide', 'Video');
                 } else {
-                    $transcript.addClass('open').slideDown(300);
-                    $button.text($button.text().replace('Video', 'Hide'));
+                    transcript.classList.add('open');
+                    this.slideDown(transcript, 300);
+                    button.textContent = button.textContent.replace('Video', 'Hide');
                 }
             }
-        }        // Utility method to get video ID from URL
+        }
+
+        // Animation utilities to replace jQuery's fadeOut, slideUp, slideDown
+        fadeOut(element, duration, callback) {
+            element.style.opacity = 1;
+            element.style.transition = `opacity ${duration}ms`;
+
+            requestAnimationFrame(() => {
+                element.style.opacity = 0;
+            });
+
+            setTimeout(() => {
+                element.style.display = 'none';
+                if (callback) callback();
+            }, duration);
+        }
+
+        slideUp(element, duration) {
+            element.style.transition = `max-height ${duration}ms ease-out, padding ${duration}ms ease-out`;
+            element.style.overflow = 'hidden';
+            element.style.maxHeight = element.scrollHeight + 'px';
+
+            requestAnimationFrame(() => {
+                element.style.maxHeight = '0';
+                element.style.paddingTop = '0';
+                element.style.paddingBottom = '0';
+            });
+
+            setTimeout(() => {
+                element.style.display = 'none';
+                element.style.transition = '';
+                element.style.overflow = '';
+                element.style.maxHeight = '';
+                element.style.paddingTop = '';
+                element.style.paddingBottom = '';
+            }, duration);
+        }
+
+        slideDown(element, duration) {
+            element.style.display = 'block';
+            element.style.transition = `max-height ${duration}ms ease-out, padding ${duration}ms ease-out`;
+            element.style.overflow = 'hidden';
+            element.style.maxHeight = '0';
+            element.style.paddingTop = '0';
+            element.style.paddingBottom = '0';
+
+            requestAnimationFrame(() => {
+                element.style.maxHeight = element.scrollHeight + 'px';
+                element.style.paddingTop = '';
+                element.style.paddingBottom = '';
+            });
+
+            setTimeout(() => {
+                element.style.transition = '';
+                element.style.overflow = '';
+                element.style.maxHeight = '';
+            }, duration);
+        }
+
+        // Utility method to get video ID from URL
         static extractVideoId(url, type) {
             if (type === 'youtube') {
                 const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -223,61 +309,53 @@ jQuery(document).ready(function($) {
         const lazyVideoObserver = new IntersectionObserver(function(entries) {
             entries.forEach(function(entry) {
                 if (entry.isIntersecting) {
-                    const $video = $(entry.target);
-                    $video.addClass('ekwa-video-in-view');
+                    entry.target.classList.add('ekwa-video-in-view');
                     lazyVideoObserver.unobserve(entry.target);
                 }
             });
         });
 
-        $('.ekwa-video-wrapper').each(function() {
-            lazyVideoObserver.observe(this);
+        document.querySelectorAll('.ekwa-video-wrapper, .ekv-wrapper').forEach(function(wrapper) {
+            lazyVideoObserver.observe(wrapper);
         });
     }
 
     // Analytics tracking (optional)
-    $(document).on('ekwaVideoLoaded', function(e, data) {
+    document.addEventListener('ekwaVideoLoaded', function(e) {
         // Track video load event
         if (typeof gtag !== 'undefined') {
             gtag('event', 'video_load', {
-                'video_type': data.videoType,
-                'video_id': data.videoId
+                'video_type': e.detail.videoType,
+                'video_id': e.detail.videoId
             });
         }
 
         // Custom tracking hook
-        $(document).trigger('ekwa_video_analytics', data);
+        const analyticsEvent = new CustomEvent('ekwa_video_analytics', {
+            detail: e.detail
+        });
+        document.dispatchEvent(analyticsEvent);
     });
 
     // Responsive video handling
     function handleResponsiveVideos() {
-        $('.ekwa-video-wrapper').each(function() {
-            const $wrapper = $(this);
-            const $player = $wrapper.find('.ekwa-video-player');
-            const $iframe = $player.find('iframe');
+        document.querySelectorAll('.ekwa-video-wrapper, .ekv-wrapper').forEach(function(wrapper) {
+            const player = wrapper.querySelector('.ekwa-video-player, .player');
+            const iframe = player ? player.querySelector('iframe') : null;
 
-            if ($iframe.length) {
-                const aspectRatio = $iframe.attr('height') / $iframe.attr('width') * 100;
-                $player.css('padding-bottom', aspectRatio + '%');
+            if (iframe) {
+                const aspectRatio = (iframe.getAttribute('height') || 9) / (iframe.getAttribute('width') || 16) * 100;
+                player.style.paddingBottom = aspectRatio + '%';
             }
         });
     }
 
-    // Handle window resize
-    $(window).on('resize', debounce(handleResponsiveVideos, 250));
-
-    // Debounce utility function
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
+    // Handle window resize with debounce
+    let resizeTimeout;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(handleResponsiveVideos, 250);
+    });
 
     // Initialize responsive handling
     handleResponsiveVideos();
