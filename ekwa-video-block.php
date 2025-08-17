@@ -55,6 +55,10 @@ class EkwaVideoBlock {
 
         // Enqueue block editor assets
         add_action('enqueue_block_editor_assets', array($this, 'enqueue_block_editor_assets'));
+
+        // Add admin menu for settings
+        add_action('admin_menu', array($this, 'add_admin_menu'));
+        add_action('admin_init', array($this, 'admin_init'));
     }
 
     /**
@@ -309,12 +313,18 @@ class EkwaVideoBlock {
             $info['video_id'] = $matches[1];
             $info['embed_url'] = 'https://www.youtube.com/embed/' . $matches[1];
         }
-        // Vimeo URL patterns
-        elseif (preg_match('/(?:vimeo\.com\/)(?:.*#|.*/videos/)?([0-9]+)/', $url, $matches)) {
-            $info['video_type'] = 'vimeo';
-            $info['video_id'] = $matches[1];
-            $info['embed_url'] = 'https://player.vimeo.com/video/' . $matches[1];
-        }
+       // Vimeo URL patterns - UPDATED REGEX
+    elseif (preg_match('/(?:www\.)?vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/[^\/]*\/videos\/|album\/\d+\/video\/|video\/|)(\d+)(?:$|\/|\?)/', $url, $matches)) {
+        $info['video_type'] = 'vimeo';
+        $info['video_id'] = $matches[1];
+        $info['embed_url'] = 'https://player.vimeo.com/video/' . $matches[1];
+    }
+    // Alternative simpler Vimeo pattern as fallback
+    elseif (preg_match('/vimeo\.com\/(\d+)/', $url, $matches)) {
+        $info['video_type'] = 'vimeo';
+        $info['video_id'] = $matches[1];
+        $info['embed_url'] = 'https://player.vimeo.com/video/' . $matches[1];
+    }
 
         return $info;
     }
@@ -342,14 +352,94 @@ class EkwaVideoBlock {
      * Get YouTube video metadata
      */
     private function get_youtube_metadata($video_id) {
-        // You would need YouTube API key for this to work
-        // For now, return basic structure
+        // Try to get YouTube API key from WordPress options or filter
+        $api_key = apply_filters('ekwa_video_youtube_api_key', get_option('ekwa_video_youtube_api_key', ''));
+
+        if (!empty($api_key)) {
+            // Use YouTube Data API v3
+            $api_url = "https://www.googleapis.com/youtube/v3/videos?id={$video_id}&key={$api_key}&part=snippet,contentDetails,statistics";
+
+            $response = wp_remote_get($api_url);
+
+            if (!is_wp_error($response)) {
+                $body = wp_remote_retrieve_body($response);
+                $data = json_decode($body, true);
+
+                if (isset($data['items']) && !empty($data['items'])) {
+                    $video = $data['items'][0];
+                    $snippet = $video['snippet'];
+                    $content_details = $video['contentDetails'];
+
+                    return array(
+                        'video_title' => isset($snippet['title']) ? $snippet['title'] : '',
+                        'video_description' => isset($snippet['description']) ? wp_trim_words($snippet['description'], 30) : '',
+                        'video_duration' => isset($content_details['duration']) ? $content_details['duration'] : '',
+                        'upload_date' => isset($snippet['publishedAt']) ? $snippet['publishedAt'] : '',
+                        'thumbnail_url' => $this->get_best_youtube_thumbnail($video_id, $snippet),
+                    );
+                }
+            }
+        }
+
+        // Fallback: Try to get basic metadata without API
+        $fallback_data = $this->get_youtube_metadata_fallback($video_id);
+
         return array(
-            'video_title' => '',
-            'video_description' => '',
+            'video_title' => $fallback_data['title'],
+            'video_description' => $fallback_data['description'],
             'video_duration' => '',
             'upload_date' => '',
             'thumbnail_url' => 'https://img.youtube.com/vi/' . $video_id . '/maxresdefault.jpg',
+        );
+    }
+
+    /**
+     * Get the best available YouTube thumbnail
+     */
+    private function get_best_youtube_thumbnail($video_id, $snippet = null) {
+        // If we have snippet data from API, use it
+        if ($snippet && isset($snippet['thumbnails'])) {
+            $thumbnails = $snippet['thumbnails'];
+
+            // Prefer higher quality thumbnails
+            if (isset($thumbnails['maxres'])) {
+                return $thumbnails['maxres']['url'];
+            } elseif (isset($thumbnails['high'])) {
+                return $thumbnails['high']['url'];
+            } elseif (isset($thumbnails['medium'])) {
+                return $thumbnails['medium']['url'];
+            } elseif (isset($thumbnails['default'])) {
+                return $thumbnails['default']['url'];
+            }
+        }
+
+        // Fallback to standard YouTube thumbnail URLs
+        return 'https://img.youtube.com/vi/' . $video_id . '/maxresdefault.jpg';
+    }
+
+    /**
+     * Fallback method to get basic YouTube metadata without API
+     */
+    private function get_youtube_metadata_fallback($video_id) {
+        // Try to get title from oEmbed (limited but doesn't require API key)
+        $oembed_url = "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={$video_id}&format=json";
+        $response = wp_remote_get($oembed_url);
+
+        if (!is_wp_error($response)) {
+            $body = wp_remote_retrieve_body($response);
+            $data = json_decode($body, true);
+
+            if (isset($data['title'])) {
+                return array(
+                    'title' => $data['title'],
+                    'description' => isset($data['author_name']) ? 'By ' . $data['author_name'] : '',
+                );
+            }
+        }
+
+        return array(
+            'title' => '',
+            'description' => '',
         );
     }
 
@@ -487,6 +577,93 @@ class EkwaVideoBlock {
     public function deactivate() {
         // Flush rewrite rules
         flush_rewrite_rules();
+    }
+
+    /**
+     * Add admin menu
+     */
+    public function add_admin_menu() {
+        add_options_page(
+            'Ekwa Video Block Settings',
+            'Ekwa Video Block',
+            'manage_options',
+            'ekwa-video-block',
+            array($this, 'admin_page')
+        );
+    }
+
+    /**
+     * Initialize admin settings
+     */
+    public function admin_init() {
+        register_setting('ekwa_video_block_settings', 'ekwa_video_youtube_api_key');
+
+        add_settings_section(
+            'ekwa_video_block_main',
+            'YouTube API Settings',
+            array($this, 'settings_section_callback'),
+            'ekwa-video-block'
+        );
+
+        add_settings_field(
+            'ekwa_video_youtube_api_key',
+            'YouTube API Key',
+            array($this, 'youtube_api_key_callback'),
+            'ekwa-video-block',
+            'ekwa_video_block_main'
+        );
+    }
+
+    /**
+     * Settings section callback
+     */
+    public function settings_section_callback() {
+        echo '<p>Configure your YouTube API key to fetch video metadata like title, description, and duration.</p>';
+        echo '<p><strong>How to get a YouTube API key:</strong></p>';
+        echo '<ol>';
+        echo '<li>Go to <a href="https://console.developers.google.com/" target="_blank">Google Cloud Console</a></li>';
+        echo '<li>Create a new project or select an existing one</li>';
+        echo '<li>Enable the YouTube Data API v3</li>';
+        echo '<li>Create credentials (API Key)</li>';
+        echo '<li>Copy the API key and paste it below</li>';
+        echo '</ol>';
+    }
+
+    /**
+     * YouTube API key field callback
+     */
+    public function youtube_api_key_callback() {
+        $api_key = get_option('ekwa_video_youtube_api_key', '');
+        echo '<input type="text" id="ekwa_video_youtube_api_key" name="ekwa_video_youtube_api_key" value="' . esc_attr($api_key) . '" class="regular-text" />';
+        echo '<p class="description">Enter your YouTube Data API v3 key. Leave empty to use basic functionality without metadata.</p>';
+    }
+
+    /**
+     * Admin page
+     */
+    public function admin_page() {
+        ?>
+        <div class="wrap">
+            <h1>Ekwa Video Block Settings</h1>
+            <form method="post" action="options.php">
+                <?php
+                settings_fields('ekwa_video_block_settings');
+                do_settings_sections('ekwa-video-block');
+                submit_button();
+                ?>
+            </form>
+
+            <div class="card" style="margin-top: 20px;">
+                <h2>Test Your Settings</h2>
+                <p>You can test if your YouTube API key is working by trying these sample URLs in the block editor:</p>
+                <ul>
+                    <li><strong>YouTube:</strong> https://www.youtube.com/watch?v=dQw4w9WgXcQ</li>
+                    <li><strong>Vimeo:</strong> https://vimeo.com/148751763</li>
+                </ul>
+                <p>If the API key is working, you should see the video title, description, and duration automatically populate in the block editor.</p>
+            </div>
+        </div>
+        <?php
     }
 }
 

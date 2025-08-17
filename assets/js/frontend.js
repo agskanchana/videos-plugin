@@ -11,7 +11,7 @@ jQuery(document).ready(function($) {
 
         init() {
             this.bindEvents();
-            this.loadYouTubeAPI();
+            // Removed loadYouTubeAPI() - not needed for iframe embedding
         }
 
         bindEvents() {
@@ -80,26 +80,7 @@ jQuery(document).ready(function($) {
 
             // This will bubble up to thumbnail click
             $(e.target).closest('.ekwa-video-thumbnail').trigger('click');
-        }
-
-        loadYouTubeAPI() {
-            // Load YouTube API if not already loaded
-            if (!window.YT && !window.ekwaYTLoading) {
-                window.ekwaYTLoading = true;
-
-                const tag = document.createElement('script');
-                tag.src = 'https://www.youtube.com/iframe_api';
-                const firstScriptTag = document.getElementsByTagName('script')[0];
-                firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-                // YouTube API ready callback
-                window.onYouTubeIframeAPIReady = function() {
-                    $(document).trigger('ekwaYouTubeAPIReady');
-                };
-            }
-        }
-
-        // Utility method to get video ID from URL
+        }        // Utility method to get video ID from URL
         static extractVideoId(url, type) {
             if (type === 'youtube') {
                 const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -132,6 +113,39 @@ jQuery(document).ready(function($) {
             }
 
             return duration;
+        }
+
+        // Note: YouTube Iframe API is NOT loaded by default for performance
+        // The plugin uses simple iframe embedding which is faster and doesn't require the API
+        // If you need advanced YouTube API features in the future, use loadYouTubeAPIOnDemand()
+        static loadYouTubeAPIOnDemand() {
+            return new Promise((resolve) => {
+                if (window.YT && window.YT.Player) {
+                    resolve(window.YT);
+                    return;
+                }
+
+                if (!window.ekwaYTLoading) {
+                    window.ekwaYTLoading = true;
+
+                    window.onYouTubeIframeAPIReady = () => {
+                        resolve(window.YT);
+                    };
+
+                    const tag = document.createElement('script');
+                    tag.src = 'https://www.youtube.com/iframe_api';
+                    tag.async = true;
+                    document.head.appendChild(tag);
+                } else {
+                    // Wait for existing load
+                    const checkLoaded = setInterval(() => {
+                        if (window.YT && window.YT.Player) {
+                            clearInterval(checkLoaded);
+                            resolve(window.YT);
+                        }
+                    }, 100);
+                }
+            });
         }
     }
 
