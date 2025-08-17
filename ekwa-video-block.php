@@ -119,6 +119,14 @@ class EkwaVideoBlock {
                     'type' => 'boolean',
                     'default' => false,
                 ),
+                'transcript' => array(
+                    'type' => 'string',
+                    'default' => '',
+                ),
+                'showTranscript' => array(
+                    'type' => 'boolean',
+                    'default' => false,
+                ),
                 'className' => array(
                     'type' => 'string',
                     'default' => '',
@@ -151,6 +159,8 @@ class EkwaVideoBlock {
         $show_title = isset($attributes['showTitle']) ? $attributes['showTitle'] : true;
         $show_description = isset($attributes['showDescription']) ? $attributes['showDescription'] : false;
         $autoplay = isset($attributes['autoplay']) ? $attributes['autoplay'] : false;
+        $transcript = isset($attributes['transcript']) ? $attributes['transcript'] : '';
+        $show_transcript = isset($attributes['showTranscript']) ? $attributes['showTranscript'] : false;
         $class_name = isset($attributes['className']) ? $attributes['className'] : '';
 
         // Build shortcode attributes
@@ -167,6 +177,8 @@ class EkwaVideoBlock {
             'show_title' => $show_title ? 'true' : 'false',
             'show_description' => $show_description ? 'true' : 'false',
             'autoplay' => $autoplay ? 'true' : 'false',
+            'transcript' => $transcript,
+            'show_transcript' => $show_transcript ? 'true' : 'false',
             'class_name' => $class_name,
         );
 
@@ -199,6 +211,8 @@ class EkwaVideoBlock {
             'show_title' => 'true',
             'show_description' => 'false',
             'autoplay' => 'false',
+            'transcript' => '',
+            'show_transcript' => 'false',
             'class_name' => '',
         ), $atts, 'ekwa_video');
 
@@ -238,34 +252,63 @@ class EkwaVideoBlock {
         // Start output buffering
         ob_start();
         ?>
-        <div class="<?php echo esc_attr(implode(' ', $css_classes)); ?>" id="<?php echo esc_attr($unique_id); ?>">
+        <div itemprop="video" itemscope="" itemtype="http://schema.org/VideoObject" class="<?php echo esc_attr(implode(' ', $css_classes)); ?> ekv-wrapper" id="<?php echo esc_attr($unique_id); ?>">
+
+            <!-- Schema.org meta tags -->
+            <?php if (!empty($attributes['video_title'])): ?>
+                <meta itemprop="name" content="<?php echo esc_attr($attributes['video_title']); ?>">
+            <?php endif; ?>
+
+            <?php if (!empty($attributes['video_duration'])): ?>
+                <meta itemprop="duration" content="<?php echo esc_attr($attributes['video_duration']); ?>">
+            <?php endif; ?>
+
+            <?php if (!empty($attributes['upload_date'])): ?>
+                <meta itemprop="uploadDate" content="<?php echo esc_attr($attributes['upload_date']); ?>">
+            <?php endif; ?>
+
+            <?php if (!empty($thumbnail_url)): ?>
+                <meta itemprop="thumbnailURL" content="<?php echo esc_url($thumbnail_url); ?>">
+            <?php endif; ?>
+
+            <meta itemprop="interactionCount" content="1">
+
+            <?php if (!empty($attributes['embed_url'])): ?>
+                <meta itemprop="embedURL" content="<?php echo esc_url($attributes['embed_url']); ?>">
+            <?php endif; ?>
 
             <?php if ($attributes['show_title'] === 'true' && !empty($attributes['video_title'])): ?>
                 <h3 class="ekwa-video-title"><?php echo esc_html($attributes['video_title']); ?></h3>
             <?php endif; ?>
 
-            <div class="ekwa-video-player" data-video-type="<?php echo esc_attr($attributes['video_type']); ?>" data-video-id="<?php echo esc_attr($attributes['video_id']); ?>" data-autoplay="<?php echo esc_attr($attributes['autoplay']); ?>">
-                <?php if (!empty($thumbnail_url)): ?>
-                    <div class="ekwa-video-thumbnail" data-embed-url="<?php echo esc_attr($attributes['embed_url']); ?>">
-                        <img src="<?php echo esc_url($thumbnail_url); ?>" alt="<?php echo esc_attr($thumbnail_alt); ?>" class="ekwa-video-thumb-img">
-                        <div class="ekwa-video-play-button">
-                            <svg width="68" height="48" viewBox="0 0 68 48">
-                                <path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.63-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="#f00"></path>
-                                <path d="M45 24L27 14v20" fill="#fff"></path>
-                            </svg>
+            <div class="player-wrap plugin-responsive">
+                <div class="player ekwa-video-player" data-id="<?php echo esc_attr($attributes['video_id']); ?>" data-provider="<?php echo esc_attr($attributes['video_type']); ?>" data-video-type="<?php echo esc_attr($attributes['video_type']); ?>" data-video-id="<?php echo esc_attr($attributes['video_id']); ?>" data-autoplay="<?php echo esc_attr($attributes['autoplay']); ?>">
+                    <?php if (!empty($thumbnail_url)): ?>
+                        <div class="ekwa-video-thumbnail" data-embed-url="<?php echo esc_attr($attributes['embed_url']); ?>">
+                            <img decoding="async" class="image-responsive ls-is-cached lazyloaded ekwa-video-thumb-img" src="<?php echo esc_url($thumbnail_url); ?>" alt="<?php echo esc_attr($thumbnail_alt); ?>">
+                            <span class="playicon ekwa-video-play-button">
+                                <svg width="68" height="48" viewBox="0 0 68 48">
+                                    <path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.63-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="#f00"></path>
+                                    <path d="M45 24L27 14v20" fill="#fff"></path>
+                                </svg>
+                            </span>
+                            <?php if (!empty($attributes['video_duration'])): ?>
+                                <div class="ekwa-video-duration"><?php echo esc_html($this->format_duration($attributes['video_duration'])); ?></div>
+                            <?php endif; ?>
                         </div>
-                        <?php if (!empty($attributes['video_duration'])): ?>
-                            <div class="ekwa-video-duration"><?php echo esc_html($this->format_duration($attributes['video_duration'])); ?></div>
-                        <?php endif; ?>
-                    </div>
-                <?php else: ?>
-                    <div class="ekwa-video-placeholder">
-                        <p><?php _e('Video thumbnail not available', 'ekwa-video-block'); ?></p>
-                    </div>
-                <?php endif; ?>
+                    <?php else: ?>
+                        <div class="ekwa-video-placeholder">
+                            <p><?php _e('Video thumbnail not available', 'ekwa-video-block'); ?></p>
+                        </div>
+                    <?php endif; ?>
 
-                <div class="ekwa-video-iframe-container" style="display: none;"></div>
+                    <div class="ekwa-video-iframe-container" style="display: none;"></div>
+                </div>
             </div>
+
+            <?php if (!empty($attributes['video_description'])): ?>
+                <meta itemprop="description" content="<?php echo esc_attr($attributes['video_description']); ?>">
+            <?php endif; ?>
 
             <?php if ($attributes['show_description'] === 'true' && !empty($attributes['video_description'])): ?>
                 <div class="ekwa-video-description">
@@ -273,24 +316,23 @@ class EkwaVideoBlock {
                 </div>
             <?php endif; ?>
 
-            <!-- Schema.org structured data -->
-            <script type="application/ld+json">
-            {
-                "@context": "http://schema.org",
-                "@type": "VideoObject",
-                "name": "<?php echo esc_js($attributes['video_title']); ?>",
-                "description": "<?php echo esc_js($attributes['video_description']); ?>",
-                "thumbnailUrl": "<?php echo esc_url($thumbnail_url); ?>",
-                "embedUrl": "<?php echo esc_url($attributes['embed_url']); ?>",
-                <?php if (!empty($attributes['video_duration'])): ?>
-                "duration": "<?php echo esc_js($attributes['video_duration']); ?>",
-                <?php endif; ?>
-                <?php if (!empty($attributes['upload_date'])): ?>
-                "uploadDate": "<?php echo esc_js($attributes['upload_date']); ?>",
-                <?php endif; ?>
-                "interactionCount": "1"
-            }
-            </script>
+            <?php if ($attributes['show_transcript'] === 'true' && !empty($attributes['transcript'])): ?>
+                <div class="video_transcript_btn">
+                    <a data-target="#transcript-<?php echo esc_attr($attributes['video_id']); ?>" class="btn-standard btn-vdo-trans btn-transcript ekv-button" href="javascript:void(0);">
+                        Video Transcript
+                        <span class="trans-icon"></span>
+                    </a>
+                </div>
+
+                <div id="transcript-<?php echo esc_attr($attributes['video_id']); ?>" class="transcript-wrapper-del transcript" style="display: none;">
+                    <div class="transcript-box">
+                        <div class="transcript-container ekv-transcript">
+                            <?php echo wpautop(wp_kses_post($attributes['transcript'])); ?>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+
         </div>
         <?php
 
@@ -311,7 +353,7 @@ class EkwaVideoBlock {
         if (preg_match('/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/', $url, $matches)) {
             $info['video_type'] = 'youtube';
             $info['video_id'] = $matches[1];
-            $info['embed_url'] = 'https://www.youtube.com/embed/' . $matches[1];
+            $info['embed_url'] = 'https://www.youtube.com/embed/' . $matches[1] . '?rel=0';
         }
        // Vimeo URL patterns - UPDATED REGEX
     elseif (preg_match('/(?:www\.)?vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/[^\/]*\/videos\/|album\/\d+\/video\/|video\/|)(\d+)(?:$|\/|\?)/', $url, $matches)) {
@@ -476,7 +518,7 @@ class EkwaVideoBlock {
             'video_title' => isset($data['title']) ? $data['title'] : '',
             'video_description' => isset($data['description']) ? $data['description'] : '',
             'video_duration' => isset($data['duration']) ? $this->seconds_to_iso8601($data['duration']) : '',
-            'upload_date' => isset($data['upload_date']) ? $data['upload_date'] : '',
+            'upload_date' => isset($data['upload_date']) ? $this->convert_vimeo_date_to_iso($data['upload_date']) : '',
             'thumbnail_url' => isset($data['thumbnail_url']) ? $data['thumbnail_url'] : '',
         );
     }
@@ -495,6 +537,34 @@ class EkwaVideoBlock {
         if ($seconds > 0) $duration .= $seconds . 'S';
 
         return $duration;
+    }
+
+    /**
+     * Convert Vimeo date format to ISO 8601 format like YouTube
+     */
+    private function convert_vimeo_date_to_iso($vimeo_date) {
+        // Vimeo format: "2016-01-01 01:43:02"
+        // YouTube format: "2018-07-31T14:28:58Z"
+
+        if (empty($vimeo_date)) {
+            return '';
+        }
+
+        // Try to parse the Vimeo date
+        $date = DateTime::createFromFormat('Y-m-d H:i:s', $vimeo_date);
+
+        if ($date === false) {
+            // If that fails, try with timezone info
+            $date = DateTime::createFromFormat('Y-m-d H:i:s T', $vimeo_date);
+        }
+
+        if ($date === false) {
+            // If still fails, return original
+            return $vimeo_date;
+        }
+
+        // Convert to ISO 8601 format with Z suffix (UTC)
+        return $date->format('Y-m-d\TH:i:s\Z');
     }
 
     /**

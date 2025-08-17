@@ -1,7 +1,7 @@
 const { __ } = wp.i18n;
 const { registerBlockType } = wp.blocks;
 const { InspectorControls, MediaUpload, MediaUploadCheck } = wp.blockEditor;
-const { PanelBody, TextControl, ToggleControl, Button, Spinner, Notice } = wp.components;
+const { PanelBody, TextControl, TextareaControl, ToggleControl, Button, Spinner, Notice } = wp.components;
 const { useState } = wp.element;
 const { createElement: el } = wp.element;
 
@@ -88,6 +88,14 @@ registerBlockType('ekwa/video-block', {
             type: 'boolean',
             default: false,
         },
+        transcript: {
+            type: 'string',
+            default: '',
+        },
+        showTranscript: {
+            type: 'boolean',
+            default: false,
+        },
     },
 
     edit: function(props) {
@@ -106,6 +114,8 @@ registerBlockType('ekwa/video-block', {
             showTitle,
             showDescription,
             autoplay,
+            transcript,
+            showTranscript,
         } = attributes;
 
         const [isLoading, setIsLoading] = useState(false);
@@ -260,6 +270,23 @@ registerBlockType('ekwa/video-block', {
                         checked: autoplay,
                         onChange: function(value) { setAttributes({ autoplay: value }); },
                         help: __('Note: Many browsers block autoplay videos with sound', 'ekwa-video-block')
+                    }),
+
+                    el(ToggleControl, {
+                        key: 'show-transcript',
+                        label: __('Show Transcript Button', 'ekwa-video-block'),
+                        checked: showTranscript,
+                        onChange: function(value) { setAttributes({ showTranscript: value }); }
+                    }),
+
+                    showTranscript && el(TextareaControl, {
+                        key: 'transcript',
+                        label: __('Video Transcript', 'ekwa-video-block'),
+                        value: transcript,
+                        onChange: function(value) { setAttributes({ transcript: value }); },
+                        placeholder: __('Enter the video transcript here...', 'ekwa-video-block'),
+                        help: __('Add the transcript text that will be shown when users click the transcript button', 'ekwa-video-block'),
+                        rows: 8
                     })
                 ]
             ),

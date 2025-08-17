@@ -20,16 +20,34 @@ jQuery(document).ready(function($) {
 
             // Handle play button click on loaded videos
             $(document).on('click', '.ekwa-video-play-button', this.handlePlayButtonClick.bind(this));
+
+            // Handle play icon click (for schema markup structure)
+            $(document).on('click', '.playicon', this.handlePlayIconClick.bind(this));
+
+            // Handle transcript toggle
+            $(document).on('click', '.btn-transcript', this.handleTranscriptToggle.bind(this));
         }
 
         handleThumbnailClick(e) {
             e.preventDefault();
             const $thumbnail = $(e.currentTarget);
-            const $player = $thumbnail.closest('.ekwa-video-player');
-            const $container = $player.find('.ekwa-video-iframe-container');
+
+            // Support both old and new structure
+            let $player = $thumbnail.closest('.ekwa-video-player');
+            if (!$player.length) {
+                $player = $thumbnail.closest('.player');
+            }
+
+            let $container = $player.find('.ekwa-video-iframe-container');
+            if (!$container.length) {
+                // Create container if it doesn't exist
+                $container = $('<div class="ekwa-video-iframe-container" style="display: none;"></div>');
+                $player.append($container);
+            }
+
             const embedUrl = $thumbnail.data('embed-url');
-            const videoType = $player.data('video-type');
-            const videoId = $player.data('video-id');
+            let videoType = $player.data('video-type') || $player.data('provider');
+            let videoId = $player.data('video-id') || $player.data('id');
             const autoplay = $player.data('autoplay');
 
             if (!embedUrl || !videoType || !videoId) {
@@ -58,6 +76,24 @@ jQuery(document).ready(function($) {
                 class: 'ekwa-video-iframe'
             });
 
+            // Set proper aspect ratio for container
+            $container.css({
+                'position': 'relative',
+                'width': '100%',
+                'padding-bottom': '56.25%',
+                'height': '0',
+                'background': '#000'
+            });
+
+            $iframe.css({
+                'position': 'absolute',
+                'top': '0',
+                'left': '0',
+                'width': '100%',
+                'height': '100%',
+                'border': 'none'
+            });
+
             // Hide thumbnail and show iframe
             $thumbnail.fadeOut(300, function() {
                 $container.html($iframe).show();
@@ -80,6 +116,33 @@ jQuery(document).ready(function($) {
 
             // This will bubble up to thumbnail click
             $(e.target).closest('.ekwa-video-thumbnail').trigger('click');
+        }
+
+        handlePlayIconClick(e) {
+            e.preventDefault();
+            const $playIcon = $(e.currentTarget);
+            const $thumbnail = $playIcon.closest('.ekwa-video-thumbnail');
+
+            if ($thumbnail.length) {
+                $thumbnail.trigger('click');
+            }
+        }
+
+        handleTranscriptToggle(e) {
+            e.preventDefault();
+            const $button = $(e.currentTarget);
+            const targetId = $button.data('target');
+            const $transcript = $(targetId);
+
+            if ($transcript.length) {
+                if ($transcript.hasClass('open')) {
+                    $transcript.removeClass('open').slideUp(300);
+                    $button.text($button.text().replace('Hide', 'Video'));
+                } else {
+                    $transcript.addClass('open').slideDown(300);
+                    $button.text($button.text().replace('Video', 'Hide'));
+                }
+            }
         }        // Utility method to get video ID from URL
         static extractVideoId(url, type) {
             if (type === 'youtube') {

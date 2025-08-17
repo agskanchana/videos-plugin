@@ -1,7 +1,8 @@
 /* Ekwa Video Block - Frontend Styles */
 
 /* Video Wrapper */
-.ekwa-video-wrapper {
+.ekwa-video-wrapper,
+.ekv-wrapper {
     margin: 20px 0;
     position: relative;
     background: #f8f9fa;
@@ -11,7 +12,8 @@
     transition: box-shadow 0.3s ease;
 }
 
-.ekwa-video-wrapper:hover {
+.ekwa-video-wrapper:hover,
+.ekv-wrapper:hover {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
 
@@ -23,6 +25,19 @@
     font-weight: 600;
     color: #333;
     line-height: 1.4;
+}
+
+/* Player Wrapper */
+.player-wrap.plugin-responsive {
+    position: relative;
+    width: 100%;
+}
+
+.player {
+    position: relative;
+    width: 100%;
+    background: #000;
+    overflow: hidden;
 }
 
 /* Video Player Container */
@@ -45,19 +60,22 @@
     transform: scale(1.02);
 }
 
-.ekwa-video-thumb-img {
+.ekwa-video-thumb-img,
+.image-responsive {
     width: 100%;
     height: auto;
     display: block;
     transition: opacity 0.3s ease;
 }
 
-.ekwa-video-thumbnail:hover .ekwa-video-thumb-img {
+.ekwa-video-thumbnail:hover .ekwa-video-thumb-img,
+.ekwa-video-thumbnail:hover .image-responsive {
     opacity: 0.9;
 }
 
 /* Play Button Overlay */
-.ekwa-video-play-button {
+.ekwa-video-play-button,
+.playicon {
     position: absolute;
     top: 50%;
     left: 50%;
@@ -68,14 +86,19 @@
     transition: transform 0.3s ease, opacity 0.3s ease;
     opacity: 0.8;
     z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.ekwa-video-play-button:hover {
+.ekwa-video-play-button:hover,
+.playicon:hover {
     transform: translate(-50%, -50%) scale(1.1);
     opacity: 1;
 }
 
-.ekwa-video-play-button svg {
+.ekwa-video-play-button svg,
+.playicon svg {
     width: 100%;
     height: 100%;
     filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
@@ -127,6 +150,90 @@
     line-height: 1.5;
 }
 
+/* Transcript Styles */
+.video_transcript_btn {
+    padding: 15px;
+    background: #fff;
+    border-top: 1px solid #eee;
+    text-align: center;
+}
+
+.btn-transcript,
+.ekv-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: #007cba;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.btn-transcript:hover,
+.ekv-button:hover {
+    background: #005a87;
+    color: #fff;
+    text-decoration: none;
+}
+
+.trans-icon {
+    width: 16px;
+    height: 16px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.trans-icon:before {
+    content: "📄";
+    font-size: 14px;
+}
+
+.transcript-wrapper-del,
+.transcript {
+    display: none;
+    padding: 15px;
+    background: #f9f9f9;
+    border-top: 1px solid #eee;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.transcript-wrapper-del.open,
+.transcript.open {
+    display: block;
+    animation: slideDown 0.3s ease-out;
+}
+
+.transcript-box {
+    background: #fff;
+    border-radius: 5px;
+    padding: 15px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.transcript-container,
+.ekv-transcript {
+    color: #333;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.transcript-container p,
+.ekv-transcript p {
+    margin: 0 0 10px 0;
+}
+
+.transcript-container p:last-child,
+.ekv-transcript p:last-child {
+    margin-bottom: 0;
+}
+
 /* Video Placeholder */
 .ekwa-video-placeholder {
     padding: 40px 20px;
@@ -139,6 +246,22 @@
 .ekwa-video-placeholder p {
     margin: 10px 0 0 0;
     font-size: 14px;
+}
+
+/* Animations */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 300px;
+        padding-top: 15px;
+        padding-bottom: 15px;
+    }
 }
 
 /* Responsive Design */
