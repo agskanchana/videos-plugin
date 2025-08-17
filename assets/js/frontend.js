@@ -20,9 +20,6 @@ jQuery(document).ready(function($) {
 
             // Handle play button click on loaded videos
             $(document).on('click', '.ekwa-video-play-button', this.handlePlayButtonClick.bind(this));
-
-            // Handle close video button click
-            $(document).on('click', '.ekwa-video-close-button', this.handleCloseButtonClick.bind(this));
         }
 
         handleThumbnailClick(e) {
@@ -50,10 +47,8 @@ jQuery(document).ready(function($) {
                 iframeSrc += separator + 'autoplay=1&title=0&byline=0&portrait=0';
             }
 
-            // Create iframe with a unique ID for tracking
-            const iframeId = 'ekwa-video-iframe-' + videoId + '-' + Date.now();
+            // Create iframe
             const $iframe = $('<iframe>', {
-                id: iframeId,
                 src: iframeSrc,
                 frameborder: '0',
                 allowfullscreen: true,
@@ -70,20 +65,13 @@ jQuery(document).ready(function($) {
                 // Add loaded class to player
                 $player.addClass('ekwa-video-loaded');
 
-                // Store original thumbnail for restoration
-                $player.data('original-thumbnail', $thumbnail.clone());
-
-                // Add close button
-                this.addCloseButton($player);
-
                 // Trigger custom event
                 $player.trigger('ekwaVideoLoaded', {
                     videoType: videoType,
                     videoId: videoId,
-                    embedUrl: embedUrl,
-                    iframeId: iframeId
+                    embedUrl: embedUrl
                 });
-            }.bind(this));
+            });
         }
 
         handlePlayButtonClick(e) {
@@ -92,63 +80,6 @@ jQuery(document).ready(function($) {
 
             // This will bubble up to thumbnail click
             $(e.target).closest('.ekwa-video-thumbnail').trigger('click');
-        }
-
-        /**
-         * Add close button to video player
-         */
-        addCloseButton($player) {
-            const $closeButton = $('<button>', {
-                class: 'ekwa-video-close-button',
-                html: '&times;',
-                title: 'Close video and return to thumbnail'
-            });
-
-            $player.append($closeButton);
-
-            // Show close button after a short delay
-            setTimeout(() => {
-                $closeButton.addClass('ekwa-video-close-visible');
-            }, 1000);
-        }
-
-        /**
-         * Handle close button click - restore thumbnail
-         */
-        handleCloseButtonClick(e) {
-            e.preventDefault();
-            e.stopPropagation();
-
-            const $closeButton = $(e.currentTarget);
-            const $player = $closeButton.closest('.ekwa-video-player');
-            const $container = $player.find('.ekwa-video-iframe-container');
-            const $originalThumbnail = $player.data('original-thumbnail');
-
-            if (!$originalThumbnail) return;
-
-            // Remove close button
-            $closeButton.remove();
-
-            // Remove iframe and restore thumbnail
-            $container.fadeOut(300, function() {
-                $container.empty().hide();
-                
-                // Clone the original thumbnail and add it back
-                const $newThumbnail = $originalThumbnail.clone();
-                $player.find('.ekwa-video-thumbnail').remove();
-                $player.prepend($newThumbnail);
-                
-                // Remove loaded class
-                $player.removeClass('ekwa-video-loaded');
-                
-                // Show thumbnail with fade in
-                $newThumbnail.fadeIn(300);
-
-                // Trigger custom event
-                $player.trigger('ekwaVideoReset', {
-                    manual: true
-                });
-            });
         }        // Utility method to get video ID from URL
         static extractVideoId(url, type) {
             if (type === 'youtube') {
@@ -253,19 +184,6 @@ jQuery(document).ready(function($) {
 
         // Custom tracking hook
         $(document).trigger('ekwa_video_analytics', data);
-    });
-
-    // Track video reset events
-    $(document).on('ekwaVideoReset', function(e, data) {
-        // Track video reset event
-        if (typeof gtag !== 'undefined') {
-            gtag('event', 'video_reset', {
-                'reset_type': data.manual ? 'manual' : 'automatic'
-            });
-        }
-
-        // Custom tracking hook
-        $(document).trigger('ekwa_video_reset_analytics', data);
     });
 
     // Responsive video handling
