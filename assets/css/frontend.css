@@ -228,6 +228,14 @@
         width: 48px;
         height: 34px;
     }
+
+    .ekwa-video-close-button {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
+        top: 8px;
+        right: 8px;
+    }
 }
 
 /* Video Types */
