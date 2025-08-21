@@ -127,6 +127,14 @@ class EkwaVideoBlock {
                     'type' => 'boolean',
                     'default' => false,
                 ),
+                'manualInfo' => array(
+                    'type' => 'boolean',
+                    'default' => false,
+                ),
+                'openInLightbox' => array(
+                    'type' => 'boolean',
+                    'default' => false,
+                ),
                 'className' => array(
                     'type' => 'string',
                     'default' => '',
@@ -161,6 +169,8 @@ class EkwaVideoBlock {
         $autoplay = isset($attributes['autoplay']) ? $attributes['autoplay'] : false;
         $transcript = isset($attributes['transcript']) ? $attributes['transcript'] : '';
         $show_transcript = isset($attributes['showTranscript']) ? $attributes['showTranscript'] : false;
+        $manual_info = isset($attributes['manualInfo']) ? $attributes['manualInfo'] : false;
+        $open_in_lightbox = isset($attributes['openInLightbox']) ? $attributes['openInLightbox'] : false;
         $class_name = isset($attributes['className']) ? $attributes['className'] : '';
 
         // Build shortcode attributes
@@ -179,6 +189,8 @@ class EkwaVideoBlock {
             'autoplay' => $autoplay ? 'true' : 'false',
             'transcript' => $transcript,
             'show_transcript' => $show_transcript ? 'true' : 'false',
+            'manual_info' => $manual_info ? 'true' : 'false',
+            'open_in_lightbox' => $open_in_lightbox ? 'true' : 'false',
             'class_name' => $class_name,
         );
 
@@ -213,8 +225,16 @@ class EkwaVideoBlock {
             'autoplay' => 'false',
             'transcript' => '',
             'show_transcript' => 'false',
+            'manual_info' => 'false',
+            'open_in_lightbox' => 'false',
             'class_name' => '',
         ), $atts, 'ekwa_video');
+
+        // Build embed URL with autoplay for lightbox
+        if ($attributes['open_in_lightbox'] === 'true' && !empty($attributes['embed_url'])) {
+            $separator = strpos($attributes['embed_url'], '?') !== false ? '&' : '?';
+            $attributes['embed_url'] = $attributes['embed_url'] . $separator . 'autoplay=1';
+        }
 
         // If no video URL, return empty
         if (empty($attributes['video_url'])) {
@@ -239,15 +259,19 @@ class EkwaVideoBlock {
         $thumbnail_url = !empty($attributes['custom_thumbnail']) ? $attributes['custom_thumbnail'] : $attributes['thumbnail_url'];
         $thumbnail_alt = !empty($attributes['custom_thumbnail_alt']) ? $attributes['custom_thumbnail_alt'] : $attributes['video_title'];
 
-        // Generate unique ID for this video instance
-        $unique_id = 'ekwa-video-' . md5($attributes['video_url'] . time());
-
         // Build CSS classes
         $css_classes = array('ekwa-video-wrapper');
         if (!empty($attributes['class_name'])) {
             $css_classes[] = $attributes['class_name'];
         }
         $css_classes[] = 'ekwa-video-' . $attributes['video_type'];
+
+        if ($attributes['open_in_lightbox'] === 'true') {
+            $css_classes[] = 'ekwa-video-lightbox';
+        }
+
+        // Generate unique ID for this video instance
+        $unique_id = 'ekwa-video-' . md5($attributes['video_url'] . time());
 
         // Start output buffering
         ob_start();
@@ -282,10 +306,19 @@ class EkwaVideoBlock {
             <?php endif; ?>
 
             <div class="player-wrap plugin-responsive">
-                <div class="player ekwa-video-player" data-id="<?php echo esc_attr($attributes['video_id']); ?>" data-provider="<?php echo esc_attr($attributes['video_type']); ?>" data-video-type="<?php echo esc_attr($attributes['video_type']); ?>" data-video-id="<?php echo esc_attr($attributes['video_id']); ?>" data-autoplay="<?php echo esc_attr($attributes['autoplay']); ?>">
-                    <?php if (!empty($thumbnail_url)): ?>
-                        <div class="ekwa-video-thumbnail" data-embed-url="<?php echo esc_attr($attributes['embed_url']); ?>">
-                            <img decoding="async" class="image-responsive ls-is-cached lazyloaded ekwa-video-thumb-img" src="<?php echo esc_url($thumbnail_url); ?>" alt="<?php echo esc_attr($thumbnail_alt); ?>">
+                <?php if ($attributes['open_in_lightbox'] === 'true'): ?>
+                    <!-- Lightbox Thumbnail -->
+                    <a href="<?php echo esc_url($attributes['embed_url']); ?>"
+                       class="ekwa-video-lightbox-trigger glightbox"
+                       data-video-description="<?php echo esc_attr($attributes['video_description']); ?>"
+                       data-video-transcript="<?php echo esc_attr($attributes['transcript']); ?>"
+                       data-show-description="<?php echo esc_attr($attributes['show_description']); ?>"
+                       data-show-transcript="<?php echo esc_attr($attributes['show_transcript']); ?>"
+                       data-video-id="<?php echo esc_attr($attributes['video_id']); ?>">
+                        <?php if (!empty($thumbnail_url)): ?>
+                            <img src="<?php echo esc_url($thumbnail_url); ?>"
+                                 alt="<?php echo esc_attr($thumbnail_alt); ?>"
+                                 class="image-responsive ekwa-video-thumb-img">
                             <span class="playicon ekwa-video-play-button">
                                 <svg width="68" height="48" viewBox="0 0 68 48">
                                     <path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.63-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="#f00"></path>
@@ -295,28 +328,74 @@ class EkwaVideoBlock {
                             <?php if (!empty($attributes['video_duration'])): ?>
                                 <div class="ekwa-video-duration"><?php echo esc_html($this->format_duration($attributes['video_duration'])); ?></div>
                             <?php endif; ?>
-                        </div>
-                    <?php else: ?>
-                        <div class="ekwa-video-placeholder">
-                            <p><?php _e('Video thumbnail not available', 'ekwa-video-block'); ?></p>
-                        </div>
-                    <?php endif; ?>
+                        <?php else: ?>
+                            <div class="ekwa-video-placeholder">
+                                <p><?php _e('Video thumbnail not available', 'ekwa-video-block'); ?></p>
+                            </div>
+                        <?php endif; ?>
+                    </a>
+                <?php else: ?>
+                    <!-- Regular Inline Player -->
+                    <div class="player ekwa-video-player" data-id="<?php echo esc_attr($attributes['video_id']); ?>" data-provider="<?php echo esc_attr($attributes['video_type']); ?>" data-video-type="<?php echo esc_attr($attributes['video_type']); ?>" data-video-id="<?php echo esc_attr($attributes['video_id']); ?>" data-autoplay="<?php echo esc_attr($attributes['autoplay']); ?>">
+                        <?php if (!empty($thumbnail_url)): ?>
+                            <div class="ekwa-video-thumbnail" data-embed-url="<?php echo esc_attr($attributes['embed_url']); ?>">
+                                <img decoding="async" class="image-responsive ls-is-cached lazyloaded ekwa-video-thumb-img" src="<?php echo esc_url($thumbnail_url); ?>" alt="<?php echo esc_attr($thumbnail_alt); ?>">
+                                <span class="playicon ekwa-video-play-button">
+                                    <svg width="68" height="48" viewBox="0 0 68 48">
+                                        <path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.63-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="#f00"></path>
+                                        <path d="M45 24L27 14v20" fill="#fff"></path>
+                                    </svg>
+                                </span>
+                                <?php if (!empty($attributes['video_duration'])): ?>
+                                    <div class="ekwa-video-duration"><?php echo esc_html($this->format_duration($attributes['video_duration'])); ?></div>
+                                <?php endif; ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="ekwa-video-placeholder">
+                                <p><?php _e('Video thumbnail not available', 'ekwa-video-block'); ?></p>
+                            </div>
+                        <?php endif; ?>
 
-                    <div class="ekwa-video-iframe-container" style="display: none;"></div>
-                </div>
+                        <div class="ekwa-video-iframe-container" style="display: none;"></div>
+                    </div>
+                <?php endif; ?>
             </div>
 
-            <?php if (!empty($attributes['video_description'])): ?>
-                <meta itemprop="description" content="<?php echo esc_attr($attributes['video_description']); ?>">
-            <?php endif; ?>
-
-            <?php if ($attributes['show_description'] === 'true' && !empty($attributes['video_description'])): ?>
+            <!-- Show description below thumbnail for lightbox videos -->
+            <?php if ($attributes['open_in_lightbox'] === 'true' && $attributes['show_description'] === 'true' && !empty($attributes['video_description'])): ?>
                 <div class="ekwa-video-description">
                     <p><?php echo esc_html($attributes['video_description']); ?></p>
                 </div>
             <?php endif; ?>
 
-            <?php if ($attributes['show_transcript'] === 'true' && !empty($attributes['transcript'])): ?>
+            <?php if (!empty($attributes['video_description'])): ?>
+                <meta itemprop="description" content="<?php echo esc_attr($attributes['video_description']); ?>">
+            <?php endif; ?>
+
+            <?php if ($attributes['open_in_lightbox'] !== 'true' && $attributes['show_description'] === 'true' && !empty($attributes['video_description'])): ?>
+                <div class="ekwa-video-description">
+                    <p><?php echo esc_html($attributes['video_description']); ?></p>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($attributes['open_in_lightbox'] !== 'true' && $attributes['show_transcript'] === 'true' && !empty($attributes['transcript'])): ?>
+                <div class="video_transcript_btn">
+                    <a data-target="#transcript-<?php echo esc_attr($attributes['video_id']); ?>" class="btn-standard btn-vdo-trans btn-transcript ekv-button" href="javascript:void(0);">
+                        Video Transcript
+                        <span class="trans-icon"></span>
+                    </a>
+                </div>
+
+                <div id="transcript-<?php echo esc_attr($attributes['video_id']); ?>" class="transcript-wrapper-del transcript" style="display: none;">
+                    <div class="transcript-box">
+                        <div class="transcript-container ekv-transcript">
+                            <?php echo wpautop(wp_kses_post($attributes['transcript'])); ?>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($attributes['open_in_lightbox'] === 'true' && $attributes['show_transcript'] === 'true' && !empty($attributes['transcript'])): ?>
                 <div class="video_transcript_btn">
                     <a data-target="#transcript-<?php echo esc_attr($attributes['video_id']); ?>" class="btn-standard btn-vdo-trans btn-transcript ekv-button" href="javascript:void(0);">
                         Video Transcript
@@ -631,6 +710,21 @@ class EkwaVideoBlock {
             EKWA_VIDEO_BLOCK_VERSION,
             true
         );
+
+        // Enqueue lightbox initialization script
+        wp_enqueue_script(
+            'ekwa-video-block-lightbox',
+            EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/js/lightbox-init.js',
+            array(),
+            EKWA_VIDEO_BLOCK_VERSION,
+            true
+        );
+
+        // Localize script with plugin data
+        wp_localize_script('ekwa-video-block-lightbox', 'ekwaVideoData', array(
+            'pluginUrl' => EKWA_VIDEO_BLOCK_PLUGIN_URL,
+            'version' => EKWA_VIDEO_BLOCK_VERSION,
+        ));
     }
 
     /**
@@ -744,6 +838,9 @@ new EkwaVideoBlock();
 add_action('wp_ajax_ekwa_get_video_metadata', 'ekwa_get_video_metadata_ajax');
 add_action('wp_ajax_nopriv_ekwa_get_video_metadata', 'ekwa_get_video_metadata_ajax');
 
+// AJAX handler for uploading cropped thumbnail
+add_action('wp_ajax_ekwa_upload_cropped_thumbnail', 'ekwa_upload_cropped_thumbnail_ajax');
+
 function ekwa_get_video_metadata_ajax() {
     check_ajax_referer('ekwa_video_block_nonce', 'nonce');
 
@@ -764,6 +861,97 @@ function ekwa_get_video_metadata_ajax() {
 
     $metadata = $plugin->get_video_metadata($video_info['video_type'], $video_info['video_id']);
     $response = array_merge($video_info, $metadata);
+
+    wp_send_json_success($response);
+}
+
+/**
+ * AJAX handler for uploading cropped thumbnail
+ */
+function ekwa_upload_cropped_thumbnail_ajax() {
+    check_ajax_referer('ekwa_video_block_nonce', 'nonce');
+
+    if (!current_user_can('upload_files')) {
+        wp_send_json_error('Insufficient permissions');
+        return;
+    }
+
+    if (!isset($_FILES['cropped_image'])) {
+        wp_send_json_error('No image file provided');
+        return;
+    }
+
+    $original_id = intval($_POST['original_id']);
+    $file = $_FILES['cropped_image'];
+
+    // Validate file
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        wp_send_json_error('Upload error: ' . $file['error']);
+        return;
+    }
+
+    // Check file type
+    $allowed_types = array('image/jpeg', 'image/jpg', 'image/png');
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime_type = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+
+    if (!in_array($mime_type, $allowed_types)) {
+        wp_send_json_error('Invalid file type. Only JPEG and PNG are allowed.');
+        return;
+    }
+
+    // Get original attachment data
+    $original_attachment = get_post($original_id);
+    if (!$original_attachment) {
+        wp_send_json_error('Original attachment not found');
+        return;
+    }
+
+    // Generate unique filename
+    $upload_dir = wp_upload_dir();
+    $original_filename = basename(get_attached_file($original_id));
+    $file_info = pathinfo($original_filename);
+    $new_filename = $file_info['filename'] . '-cropped-' . time() . '.jpg';
+    $new_file_path = $upload_dir['path'] . '/' . $new_filename;
+
+    // Move uploaded file
+    if (!move_uploaded_file($file['tmp_name'], $new_file_path)) {
+        wp_send_json_error('Failed to save cropped image');
+        return;
+    }
+
+    // Create attachment
+    $attachment_data = array(
+        'post_mime_type' => 'image/jpeg',
+        'post_title' => $original_attachment->post_title . ' (Cropped)',
+        'post_content' => '',
+        'post_status' => 'inherit'
+    );
+
+    $attachment_id = wp_insert_attachment($attachment_data, $new_file_path);
+
+    if (is_wp_error($attachment_id)) {
+        wp_send_json_error('Failed to create attachment: ' . $attachment_id->get_error_message());
+        return;
+    }
+
+    // Generate attachment metadata
+    require_once(ABSPATH . 'wp-admin/includes/image.php');
+    $attachment_metadata = wp_generate_attachment_metadata($attachment_id, $new_file_path);
+    wp_update_attachment_metadata($attachment_id, $attachment_metadata);
+
+    // Copy alt text and other metadata from original
+    $alt_text = get_post_meta($original_id, '_wp_attachment_image_alt', true);
+    if ($alt_text) {
+        update_post_meta($attachment_id, '_wp_attachment_image_alt', $alt_text);
+    }
+
+    $response = array(
+        'id' => $attachment_id,
+        'url' => wp_get_attachment_url($attachment_id),
+        'alt' => $alt_text
+    );
 
     wp_send_json_success($response);
 }

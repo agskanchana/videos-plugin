@@ -354,3 +354,131 @@
         color: #cccccc;
     }
 }
+
+/* Image Cropping Modal Styles */
+.ekwa-cropper-modal-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(0, 0, 0, 0.8) !important;
+    z-index: 99999 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.ekwa-cropper-modal-content {
+    background: white !important;
+    border-radius: 8px !important;
+    padding: 20px !important;
+    max-width: 90vw !important;
+    max-height: 90vh !important;
+    position: relative !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important;
+}
+
+.ekwa-cropper-modal-content h3 {
+    margin: 0 0 20px 0 !important;
+    font-size: 18px !important;
+    color: #333 !important;
+    font-weight: 600 !important;
+}
+
+.ekwa-cropper-modal-content p {
+    margin: 0 0 20px 0 !important;
+    color: #666 !important;
+    font-size: 14px !important;
+}
+
+.ekwa-cropper-image-container {
+    max-width: 800px !important;
+    max-height: 500px !important;
+    margin-bottom: 20px !important;
+    overflow: hidden !important;
+    border-radius: 4px !important;
+}
+
+.ekwa-cropper-image-container img {
+    max-width: 100% !important;
+    height: auto !important;
+    display: block !important;
+}
+
+.ekwa-cropper-buttons {
+    display: flex !important;
+    gap: 10px !important;
+    justify-content: flex-end !important;
+}
+
+.ekwa-cropper-buttons .button {
+    padding: 8px 16px !important;
+    border-radius: 4px !important;
+    font-size: 14px !important;
+    cursor: pointer !important;
+    border: 1px solid #ddd !important;
+    background: white !important;
+    color: #333 !important;
+    transition: all 0.2s ease !important;
+}
+
+.ekwa-cropper-buttons .button:hover {
+    background: #f8f9fa !important;
+    border-color: #007cba !important;
+}
+
+.ekwa-cropper-buttons .button-primary {
+    background: #007cba !important;
+    color: white !important;
+    border-color: #007cba !important;
+}
+
+.ekwa-cropper-buttons .button-primary:hover {
+    background: #005a87 !important;
+    border-color: #005a87 !important;
+}
+
+/* Cropper.js Integration */
+.cropper-container {
+    direction: ltr !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
+    position: relative !important;
+    touch-action: none !important;
+    user-select: none !important;
+}
+
+.cropper-container img {
+    display: block !important;
+    height: 100% !important;
+    image-orientation: 0deg !important;
+    max-height: none !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    min-width: 0 !important;
+    width: 100% !important;
+}
+
+/* Responsive modal for smaller screens */
+@media (max-width: 768px) {
+    .ekwa-cropper-modal-content {
+        max-width: 95vw !important;
+        max-height: 95vh !important;
+        padding: 15px !important;
+    }
+
+    .ekwa-cropper-image-container {
+        max-width: 100% !important;
+        max-height: 400px !important;
+    }
+
+    .ekwa-cropper-buttons {
+        flex-direction: column !important;
+    }
+
+    .ekwa-cropper-buttons .button {
+        width: 100% !important;
+        margin: 0 !important;
+    }
+}

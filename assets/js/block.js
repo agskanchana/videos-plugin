@@ -96,6 +96,14 @@ registerBlockType('ekwa/video-block', {
             type: 'boolean',
             default: false,
         },
+        manualInfo: {
+            type: 'boolean',
+            default: false,
+        },
+        openInLightbox: {
+            type: 'boolean',
+            default: false,
+        },
     },
 
     edit: function(props) {
@@ -116,6 +124,8 @@ registerBlockType('ekwa/video-block', {
             autoplay,
             transcript,
             showTranscript,
+            manualInfo,
+            openInLightbox,
         } = attributes;
 
         const [isLoading, setIsLoading] = useState(false);
@@ -125,7 +135,7 @@ registerBlockType('ekwa/video-block', {
          * Fetch video metadata when URL changes
          */
         const fetchVideoMetadata = function(url) {
-            if (!url) return;
+            if (!url || manualInfo) return; // Skip if manual info is enabled
 
             setIsLoading(true);
             setError('');
@@ -156,10 +166,14 @@ registerBlockType('ekwa/video-block', {
                     });
                 } else {
                     setError(data.data || 'Failed to fetch video metadata');
+                    // Auto-enable manual info when API fails
+                    setAttributes({ manualInfo: true });
                 }
             })
             .catch(function(err) {
                 setError('Error fetching video metadata: ' + err.message);
+                // Auto-enable manual info when API fails
+                setAttributes({ manualInfo: true });
             })
             .finally(function() {
                 setIsLoading(false);
@@ -171,9 +185,21 @@ registerBlockType('ekwa/video-block', {
          */
         const onVideoUrlChange = function(url) {
             setAttributes({ videoUrl: url });
-            if (url) {
-                fetchVideoMetadata(url);
-            } else {
+            if (url && !manualInfo) {
+                // Extract basic video info first
+                const basicInfo = extractBasicVideoInfo(url);
+                if (basicInfo.video_type && basicInfo.video_id) {
+                    setAttributes({
+                        videoType: basicInfo.video_type,
+                        videoId: basicInfo.video_id,
+                        embedUrl: basicInfo.embed_url,
+                    });
+                    fetchVideoMetadata(url);
+                } else {
+                    setError('Invalid video URL format');
+                    setAttributes({ manualInfo: true });
+                }
+            } else if (!url) {
                 // Clear all video-related attributes
                 setAttributes({
                     videoType: '',
@@ -189,15 +215,232 @@ registerBlockType('ekwa/video-block', {
         };
 
         /**
-         * Handle custom thumbnail selection
+         * Extract basic video info from URL (client-side)
+         */
+        const extractBasicVideoInfo = function(url) {
+            const info = {
+                video_type: '',
+                video_id: '',
+                embed_url: '',
+            };
+
+            // YouTube URL patterns
+            const youtubeMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+            if (youtubeMatch) {
+                info.video_type = 'youtube';
+                info.video_id = youtubeMatch[1];
+                info.embed_url = 'https://www.youtube.com/embed/' + youtubeMatch[1] + '?rel=0';
+                return info;
+            }
+
+            // Vimeo URL patterns
+            const vimeoMatch = url.match(/(?:www\.)?vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/[^\/]*\/videos\/|album\/\d+\/video\/|video\/|)(\d+)(?:$|\/|\?)/);
+            if (vimeoMatch) {
+                info.video_type = 'vimeo';
+                info.video_id = vimeoMatch[1];
+                info.embed_url = 'https://player.vimeo.com/video/' + vimeoMatch[1];
+                return info;
+            }
+
+            return info;
+        };
+
+        /**
+         * Handle custom thumbnail selection with cropping
          */
         const onSelectCustomThumbnail = function(media) {
-            setAttributes({
-                customThumbnail: {
-                    id: media.id,
-                    url: media.url,
-                    alt: media.alt,
+            // Create cropping modal
+            showCroppingModal(media);
+        };
+
+        /**
+         * Show image cropping modal
+         */
+        const showCroppingModal = function(media) {
+            // Create modal overlay
+            const modalOverlay = document.createElement('div');
+            modalOverlay.className = 'ekwa-cropper-modal-overlay';
+            modalOverlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                z-index: 99999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+
+            // Create modal content
+            const modalContent = document.createElement('div');
+            modalContent.className = 'ekwa-cropper-modal-content';
+            modalContent.style.cssText = `
+                background: white;
+                border-radius: 8px;
+                padding: 20px;
+                max-width: 90vw;
+                max-height: 90vh;
+                position: relative;
+            `;
+
+            // Create modal header
+            const modalHeader = document.createElement('div');
+            modalHeader.innerHTML = `
+                <h3 style="margin: 0 0 20px 0;">Crop Thumbnail Image</h3>
+                <p style="margin: 0 0 20px 0; color: #666;">Crop your image to 16:9 aspect ratio (1280x720 or 640x360)</p>
+            `;
+
+            // Create image container
+            const imageContainer = document.createElement('div');
+            imageContainer.style.cssText = `
+                max-width: 800px;
+                max-height: 500px;
+                margin-bottom: 20px;
+            `;
+
+            // Create image element
+            const cropImage = document.createElement('img');
+            cropImage.src = media.url;
+            cropImage.style.cssText = `
+                max-width: 100%;
+                height: auto;
+                display: block;
+            `;
+
+            // Create buttons container
+            const buttonsContainer = document.createElement('div');
+            buttonsContainer.style.cssText = `
+                display: flex;
+                gap: 10px;
+                justify-content: flex-end;
+            `;
+
+            const cancelButton = document.createElement('button');
+            cancelButton.textContent = 'Cancel';
+            cancelButton.className = 'button';
+            cancelButton.onclick = function() {
+                document.body.removeChild(modalOverlay);
+            };
+
+            const cropButton = document.createElement('button');
+            cropButton.textContent = 'Crop & Use';
+            cropButton.className = 'button button-primary';
+
+            // Assemble modal
+            imageContainer.appendChild(cropImage);
+            buttonsContainer.appendChild(cancelButton);
+            buttonsContainer.appendChild(cropButton);
+            modalContent.appendChild(modalHeader);
+            modalContent.appendChild(imageContainer);
+            modalContent.appendChild(buttonsContainer);
+            modalOverlay.appendChild(modalContent);
+            document.body.appendChild(modalOverlay);
+
+            // Initialize Cropper.js when image loads
+            cropImage.onload = function() {
+                // Load Cropper.js if not already loaded
+                if (!window.Cropper) {
+                    loadCropperJS().then(function() {
+                        initializeCropper();
+                    });
+                } else {
+                    initializeCropper();
                 }
+
+                function initializeCropper() {
+                    const cropper = new Cropper(cropImage, {
+                        aspectRatio: 16 / 9, // 16:9 aspect ratio
+                        viewMode: 1,
+                        dragMode: 'move',
+                        autoCropArea: 1,
+                        restore: false,
+                        guides: true,
+                        center: true,
+                        highlight: false,
+                        cropBoxMovable: true,
+                        cropBoxResizable: true,
+                        toggleDragModeOnDblclick: false,
+                    });
+
+                    cropButton.onclick = function() {
+                        const canvas = cropper.getCroppedCanvas({
+                            width: 1280,
+                            height: 720,
+                            imageSmoothingEnabled: true,
+                            imageSmoothingQuality: 'high',
+                        });
+
+                        canvas.toBlob(function(blob) {
+                            // Create FormData to upload cropped image
+                            const formData = new FormData();
+                            formData.append('action', 'ekwa_upload_cropped_thumbnail');
+                            formData.append('nonce', ekwaVideoBlock.nonce);
+                            formData.append('original_id', media.id);
+                            formData.append('cropped_image', blob, 'cropped-thumbnail.jpg');
+
+                            // Upload cropped image
+                            fetch(ekwaVideoBlock.ajaxUrl, {
+                                method: 'POST',
+                                body: formData,
+                            })
+                            .then(function(response) {
+                                return response.json();
+                            })
+                            .then(function(data) {
+                                if (data.success) {
+                                    setAttributes({
+                                        customThumbnail: {
+                                            id: data.data.id,
+                                            url: data.data.url,
+                                            alt: media.alt || '',
+                                        }
+                                    });
+                                    document.body.removeChild(modalOverlay);
+                                } else {
+                                    alert('Error uploading cropped image: ' + (data.data || 'Unknown error'));
+                                }
+                            })
+                            .catch(function(error) {
+                                alert('Error uploading cropped image: ' + error.message);
+                            });
+                        }, 'image/jpeg', 0.9);
+                    };
+                }
+            };
+
+            // Close modal when clicking overlay
+            modalOverlay.onclick = function(e) {
+                if (e.target === modalOverlay) {
+                    document.body.removeChild(modalOverlay);
+                }
+            };
+        };
+
+        /**
+         * Load Cropper.js library
+         */
+        const loadCropperJS = function() {
+            return new Promise(function(resolve) {
+                if (window.Cropper) {
+                    resolve();
+                    return;
+                }
+
+                // Load CSS
+                const cssLink = document.createElement('link');
+                cssLink.rel = 'stylesheet';
+                cssLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css';
+                document.head.appendChild(cssLink);
+
+                // Load JS
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js';
+                script.onload = function() {
+                    resolve();
+                };
+                document.head.appendChild(script);
             });
         };
 
@@ -273,6 +516,82 @@ registerBlockType('ekwa/video-block', {
                     }),
 
                     el(ToggleControl, {
+                        key: 'open-lightbox',
+                        label: __('Open in Lightbox', 'ekwa-video-block'),
+                        checked: openInLightbox,
+                        onChange: function(value) { setAttributes({ openInLightbox: value }); },
+                        help: __('Open video in a popup lightbox instead of inline player', 'ekwa-video-block')
+                    }),
+
+                    el(ToggleControl, {
+                        key: 'manual-info',
+                        label: __('Enter Video Information Manually', 'ekwa-video-block'),
+                        checked: manualInfo,
+                        onChange: function(value) {
+                            setAttributes({ manualInfo: value });
+                            if (!value && videoUrl) {
+                                fetchVideoMetadata(videoUrl);
+                            }
+                        },
+                        help: __('Enable this to manually enter video details when API is unavailable', 'ekwa-video-block')
+                    }),
+
+                    // Manual input fields when manualInfo is enabled
+                    manualInfo && [
+                        el(TextControl, {
+                            key: 'manual-video-id',
+                            label: __('Video ID', 'ekwa-video-block'),
+                            value: videoId,
+                            onChange: function(value) { setAttributes({ videoId: value }); },
+                            help: __('Enter the video ID (e.g., YouTube: dQw4w9WgXcQ, Vimeo: 123456789)', 'ekwa-video-block')
+                        }),
+
+                        el(TextControl, {
+                            key: 'manual-video-type',
+                            label: __('Video Type', 'ekwa-video-block'),
+                            value: videoType,
+                            onChange: function(value) {
+                                setAttributes({
+                                    videoType: value,
+                                    embedUrl: value === 'youtube'
+                                        ? 'https://www.youtube.com/embed/' + videoId + '?rel=0'
+                                        : value === 'vimeo'
+                                        ? 'https://player.vimeo.com/video/' + videoId
+                                        : ''
+                                });
+                            },
+                            help: __('Enter "youtube" or "vimeo"', 'ekwa-video-block')
+                        }),
+
+                        el(TextControl, {
+                            key: 'manual-duration',
+                            label: __('Video Duration', 'ekwa-video-block'),
+                            value: videoDuration,
+                            onChange: function(value) { setAttributes({ videoDuration: value }); },
+                            placeholder: __('e.g., PT4M30S or 4:30', 'ekwa-video-block'),
+                            help: __('Duration in ISO 8601 format (PT4M30S) or simple format (4:30)', 'ekwa-video-block')
+                        }),
+
+                        el(TextControl, {
+                            key: 'manual-upload-date',
+                            label: __('Upload Date', 'ekwa-video-block'),
+                            value: uploadDate,
+                            onChange: function(value) { setAttributes({ uploadDate: value }); },
+                            placeholder: __('e.g., 2023-12-01T10:30:00Z', 'ekwa-video-block'),
+                            help: __('Upload date in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)', 'ekwa-video-block')
+                        }),
+
+                        el(TextControl, {
+                            key: 'manual-thumbnail',
+                            label: __('Thumbnail URL', 'ekwa-video-block'),
+                            value: thumbnailUrl,
+                            onChange: function(value) { setAttributes({ thumbnailUrl: value }); },
+                            placeholder: __('https://example.com/thumbnail.jpg', 'ekwa-video-block'),
+                            help: __('Direct URL to video thumbnail image', 'ekwa-video-block')
+                        })
+                    ],
+
+                    el(ToggleControl, {
                         key: 'show-transcript',
                         label: __('Show Transcript Button', 'ekwa-video-block'),
                         checked: showTranscript,
@@ -288,6 +607,63 @@ registerBlockType('ekwa/video-block', {
                         help: __('Add the transcript text that will be shown when users click the transcript button', 'ekwa-video-block'),
                         rows: 8
                     })
+                ]
+            ),
+
+            videoUrl && videoType && el(PanelBody, {
+                title: __('Custom Thumbnail', 'ekwa-video-block'),
+                initialOpen: false
+            },
+                el('p', {}, __('Upload a custom thumbnail image to replace the default video thumbnail.', 'ekwa-video-block')),
+
+                !customThumbnail.url && el(MediaUploadCheck, {},
+                    el(MediaUpload, {
+                        onSelect: onSelectCustomThumbnail,
+                        allowedTypes: ['image'],
+                        value: customThumbnail.id,
+                        render: function(obj) {
+                            return el(Button, {
+                                className: 'button button-large',
+                                onClick: obj.open
+                            }, __('Upload Custom Thumbnail', 'ekwa-video-block'));
+                        }
+                    })
+                ),
+
+                customThumbnail.url && [
+                    el('div', {
+                        key: 'thumbnail-preview',
+                        style: { marginBottom: '10px' }
+                    },
+                        el('img', {
+                            src: customThumbnail.url,
+                            alt: customThumbnail.alt || '',
+                            style: { maxWidth: '100%', height: 'auto' }
+                        })
+                    ),
+                    el('div', {
+                        key: 'thumbnail-actions',
+                        style: { display: 'flex', gap: '10px' }
+                    },
+                        el(MediaUploadCheck, {},
+                            el(MediaUpload, {
+                                onSelect: onSelectCustomThumbnail,
+                                allowedTypes: ['image'],
+                                value: customThumbnail.id,
+                                render: function(obj) {
+                                    return el(Button, {
+                                        onClick: obj.open,
+                                        variant: 'secondary'
+                                    }, __('Replace Thumbnail', 'ekwa-video-block'));
+                                }
+                            })
+                        ),
+                        el(Button, {
+                            onClick: onRemoveCustomThumbnail,
+                            variant: 'secondary',
+                            isDestructive: true
+                        }, __('Remove Custom Thumbnail', 'ekwa-video-block'))
+                    )
                 ]
             ),
 
