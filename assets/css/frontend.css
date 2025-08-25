@@ -48,6 +48,23 @@
     overflow: hidden;
 }
 
+/* When video is loaded/playing, ensure proper positioning */
+.ekwa-video-player.ekwa-video-loaded {
+    position: relative;
+}
+
+/* Video Player Container - ensure proper stacking for overlay */
+.ekwa-video-player .ekwa-video-iframe-container {
+    position: relative;
+    z-index: 1; /* Behind thumbnail overlay */
+}
+
+/* Thumbnail overlay positioning */
+.ekwa-video-player .ekwa-video-thumbnail {
+    position: relative;
+    z-index: 2; /* Above video when overlaying */
+}
+
 /* Video Thumbnail */
 .ekwa-video-thumbnail {
     position: relative;
@@ -167,7 +184,7 @@ a.ekwa-video-lightbox-trigger {
 
 .ekwa-video-lightbox-trigger:hover,
 a.ekwa-video-lightbox-trigger:hover {
-    transform: scale(1.02);
+    /* transform: scale(1.02); */
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
     text-decoration: none;
 }
@@ -203,7 +220,7 @@ a.ekwa-video-lightbox-trigger .playicon {
 
 .ekwa-video-lightbox-trigger:hover .playicon,
 a.ekwa-video-lightbox-trigger:hover .playicon {
-    transform: scale(1.1);
+    transform: translate(-50%, -50%) scale(1.1);
 }
 
 .ekwa-video-lightbox-trigger .ekwa-video-duration,

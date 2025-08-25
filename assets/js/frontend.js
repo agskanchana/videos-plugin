@@ -6,12 +6,13 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     class EkwaVideoPlayer {
         constructor() {
+            this.players = new Map(); // Store player instances and states
             this.init();
         }
 
         init() {
             this.bindEvents();
-            // Removed loadYouTubeAPI() - not needed for iframe embedding
+            this.loadYouTubeAPI(); // Load API for better control
         }
 
         bindEvents() {
@@ -40,6 +41,36 @@ document.addEventListener('DOMContentLoaded', function() {
             document.addEventListener('click', (e) => {
                 if (e.target.closest('.btn-transcript')) {
                     this.handleTranscriptToggle(e);
+                }
+            });
+        }
+
+        loadYouTubeAPI() {
+            if (window.YT && window.YT.Player) {
+                return Promise.resolve(window.YT);
+            }
+
+            return new Promise((resolve) => {
+                if (!window.ekwaYTLoading) {
+                    window.ekwaYTLoading = true;
+
+                    window.onYouTubeIframeAPIReady = () => {
+                        console.log('YouTube API loaded');
+                        resolve(window.YT);
+                    };
+
+                    const tag = document.createElement('script');
+                    tag.src = 'https://www.youtube.com/iframe_api';
+                    tag.async = true;
+                    document.head.appendChild(tag);
+                } else {
+                    // Wait for existing load
+                    const checkLoaded = setInterval(() => {
+                        if (window.YT && window.YT.Player) {
+                            clearInterval(checkLoaded);
+                            resolve(window.YT);
+                        }
+                    }, 100);
                 }
             });
         }
@@ -73,15 +104,210 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Build iframe source with autoplay
+            if (videoType === 'youtube') {
+                // Check if we have an existing player for this video
+                const existingPlayerState = this.players.get(videoId);
+
+                if (existingPlayerState && existingPlayerState.player) {
+                    // Resume existing player
+                    this.resumeYouTubePlayer(existingPlayerState, thumbnail, player);
+                } else {
+                    // Create new player
+                    const playerId = `player-${videoId}-${Date.now()}`;
+                    this.loadYouTubePlayer(player, container, thumbnail, videoId, playerId);
+                }
+            } else if (videoType === 'vimeo') {
+                this.loadVimeoPlayer(player, container, thumbnail, embedUrl);
+            }
+        }
+
+        resumeYouTubePlayer(playerState, thumbnail, playerElement) {
+            const { player: ytPlayer, container, currentTime } = playerState;
+
+            console.log('Resuming YouTube player from:', currentTime);
+
+            // Hide thumbnail overlay to reveal the active video underneath
+            thumbnail.style.opacity = '0';
+            thumbnail.style.transition = 'opacity 300ms';
+
+            setTimeout(() => {
+                // Reset thumbnail positioning after fade
+                thumbnail.style.position = '';
+                thumbnail.style.top = '';
+                thumbnail.style.left = '';
+                thumbnail.style.width = '';
+                thumbnail.style.height = '';
+                thumbnail.style.zIndex = '';
+                thumbnail.style.display = 'none';
+
+                // Show the player container
+                container.style.display = 'block';
+                playerElement.classList.add('ekwa-video-loaded');
+
+                // Seek to saved time and play
+                if (currentTime > 0) {
+                    ytPlayer.seekTo(currentTime, true);
+                }
+                ytPlayer.playVideo();
+            }, 300);
+        }
+
+        loadYouTubePlayer(player, container, thumbnail, videoId, playerId) {
+            // Get stored time if video was paused before
+            const playerState = this.players.get(videoId) || { currentTime: 0 };
+
+            console.log('Creating new YouTube player for:', videoId);
+
+            // Set proper aspect ratio for container
+            Object.assign(container.style, {
+                position: 'relative',
+                width: '100%',
+                paddingBottom: '56.25%',
+                height: '0',
+                background: '#000',
+                display: 'block'
+            });
+
+            // Create iframe element
+            const iframe = document.createElement('div');
+            iframe.id = playerId;
+            iframe.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+            `;
+
+            container.innerHTML = '';
+            container.appendChild(iframe);
+
+            // Hide thumbnail and show iframe
+            this.fadeOut(thumbnail, 300, () => {
+                // Make sure container is visible first
+                container.style.display = 'block';
+
+                // Initialize YouTube player with API for better control
+                this.loadYouTubeAPI().then(() => {
+                    const ytPlayer = new YT.Player(playerId, {
+                        videoId: videoId,
+                        playerVars: {
+                            autoplay: 1,
+                            rel: 0, // Don't show related videos
+                            modestbranding: 1,
+                            fs: 1,
+                            cc_load_policy: 0,
+                            iv_load_policy: 3,
+                            autohide: 0,
+                            start: Math.floor(playerState.currentTime), // Resume from where it was paused
+                            origin: window.location.origin // Fix origin issues
+                        },
+                        events: {
+                            onReady: (readyEvent) => {
+                                console.log('YouTube player ready');
+                                // Store player reference
+                                this.players.set(videoId, {
+                                    ...playerState,
+                                    player: ytPlayer,
+                                    container: container,
+                                    thumbnail: thumbnail,
+                                    playerId: playerId
+                                });
+
+                                // Add loaded class to player
+                                player.classList.add('ekwa-video-loaded');
+
+                                // Trigger custom event
+                                const customEvent = new CustomEvent('ekwaVideoLoaded', {
+                                    detail: {
+                                        videoType: 'youtube',
+                                        videoId: videoId,
+                                        player: ytPlayer
+                                    }
+                                });
+                                player.dispatchEvent(customEvent);
+                            },
+                            onStateChange: (stateEvent) => {
+                                this.handleYouTubeStateChange(stateEvent, videoId, player);
+                            },
+                            onError: (errorEvent) => {
+                                console.error('YouTube player error:', errorEvent.data);
+                            }
+                        }
+                    });
+                });
+            });
+        }
+
+        handleYouTubeStateChange(event, videoId, playerElement) {
+            const playerState = this.players.get(videoId);
+            if (!playerState) return;
+
+            const { player, container, thumbnail } = playerState;
+
+            switch (event.data) {
+                case YT.PlayerState.PLAYING:
+                    console.log('Video playing');
+                    break;
+
+                case YT.PlayerState.PAUSED:
+                    console.log('Video paused');
+                    // Store current time
+                    const currentTime = player.getCurrentTime();
+                    this.players.set(videoId, {
+                        ...playerState,
+                        currentTime: currentTime
+                    });
+
+                    // Show thumbnail back
+                    this.showThumbnailBack(container, thumbnail, playerElement);
+                    break;
+
+                case YT.PlayerState.ENDED:
+                    console.log('Video ended');
+                    // Reset time and show thumbnail
+                    this.players.set(videoId, {
+                        ...playerState,
+                        currentTime: 0
+                    });
+
+                    this.showThumbnailBack(container, thumbnail, playerElement);
+                    break;
+            }
+        }
+
+        showThumbnailBack(container, thumbnail, playerElement) {
+            // Instead of hiding the video, overlay the thumbnail on top
+            // Keep the video container visible but overlay the thumbnail
+
+            // Position thumbnail as overlay
+            thumbnail.style.position = 'absolute';
+            thumbnail.style.top = '0';
+            thumbnail.style.left = '0';
+            thumbnail.style.width = '100%';
+            thumbnail.style.height = '100%';
+            thumbnail.style.zIndex = '10';
+            thumbnail.style.display = 'block';
+            thumbnail.style.opacity = '0';
+            thumbnail.style.transition = 'opacity 300ms';
+            thumbnail.style.cursor = 'pointer';
+
+            // Make sure the player container is positioned relative
+            playerElement.style.position = 'relative';
+
+            requestAnimationFrame(() => {
+                thumbnail.style.opacity = '1';
+            });
+
+            // Remove loaded class but keep video active underneath
+            playerElement.classList.remove('ekwa-video-loaded');
+        }
+
+        loadVimeoPlayer(player, container, thumbnail, embedUrl) {
+            // Build iframe source with autoplay and no related content
             let iframeSrc = embedUrl;
             const separator = embedUrl.includes('?') ? '&' : '?';
-
-            if (videoType === 'youtube') {
-                iframeSrc += separator + 'autoplay=1&rel=0&modestbranding=1';
-            } else if (videoType === 'vimeo') {
-                iframeSrc += separator + 'autoplay=1&title=0&byline=0&portrait=0';
-            }
+            iframeSrc += separator + 'autoplay=1&title=0&byline=0&portrait=0&loop=0';
 
             // Create iframe
             const iframe = document.createElement('iframe');
@@ -121,14 +347,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 player.classList.add('ekwa-video-loaded');
 
                 // Trigger custom event
-                const event = new CustomEvent('ekwaVideoLoaded', {
+                const customEvent = new CustomEvent('ekwaVideoLoaded', {
                     detail: {
-                        videoType: videoType,
-                        videoId: videoId,
+                        videoType: 'vimeo',
                         embedUrl: embedUrl
                     }
                 });
-                player.dispatchEvent(event);
+                player.dispatchEvent(customEvent);
             });
         }
 
@@ -264,38 +489,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return duration;
         }
 
-        // Note: YouTube Iframe API is NOT loaded by default for performance
-        // The plugin uses simple iframe embedding which is faster and doesn't require the API
-        // If you need advanced YouTube API features in the future, use loadYouTubeAPIOnDemand()
-        static loadYouTubeAPIOnDemand() {
-            return new Promise((resolve) => {
-                if (window.YT && window.YT.Player) {
-                    resolve(window.YT);
-                    return;
-                }
-
-                if (!window.ekwaYTLoading) {
-                    window.ekwaYTLoading = true;
-
-                    window.onYouTubeIframeAPIReady = () => {
-                        resolve(window.YT);
-                    };
-
-                    const tag = document.createElement('script');
-                    tag.src = 'https://www.youtube.com/iframe_api';
-                    tag.async = true;
-                    document.head.appendChild(tag);
-                } else {
-                    // Wait for existing load
-                    const checkLoaded = setInterval(() => {
-                        if (window.YT && window.YT.Player) {
-                            clearInterval(checkLoaded);
-                            resolve(window.YT);
-                        }
-                    }, 100);
-                }
-            });
-        }
+        // Note: YouTube Iframe API is loaded by default for better video control
+        // This allows us to handle pause/resume states and prevent related videos
     }
 
     // Initialize the video player
