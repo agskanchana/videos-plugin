@@ -720,10 +720,23 @@ class EkwaVideoBlock {
             true
         );
 
+        // Conditionally enqueue GA4 tracking script
+        $ga4_tracking_enabled = get_option('ekwa_video_ga4_tracking', false);
+        if ($ga4_tracking_enabled) {
+            wp_enqueue_script(
+                'ekwa-video-block-ga4-tracking',
+                EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/js/ga4-tracking.js',
+                array('ekwa-video-block-frontend'),
+                EKWA_VIDEO_BLOCK_VERSION,
+                true
+            );
+        }
+
         // Localize script with plugin data
         wp_localize_script('ekwa-video-block-lightbox', 'ekwaVideoData', array(
             'pluginUrl' => EKWA_VIDEO_BLOCK_PLUGIN_URL,
             'version' => EKWA_VIDEO_BLOCK_VERSION,
+            'ga4TrackingEnabled' => $ga4_tracking_enabled,
         ));
     }
 
@@ -747,12 +760,14 @@ class EkwaVideoBlock {
      * Add admin menu
      */
     public function add_admin_menu() {
-        add_options_page(
-            'Ekwa Video Block Settings',
-            'Ekwa Video Block',
-            'manage_options',
-            'ekwa-video-block',
-            array($this, 'admin_page')
+        add_menu_page(
+            'Ekwa Video Block Settings', // Page title
+            'Ekwa Video Block',         // Menu title
+            'manage_options',           // Capability
+            'ekwa-video-block',         // Menu slug
+            array($this, 'admin_page'), // Callback
+            'dashicons-format-video',   // Icon
+            60                          // Position
         );
     }
 
@@ -761,6 +776,7 @@ class EkwaVideoBlock {
      */
     public function admin_init() {
         register_setting('ekwa_video_block_settings', 'ekwa_video_youtube_api_key');
+        register_setting('ekwa_video_block_settings', 'ekwa_video_ga4_tracking');
 
         add_settings_section(
             'ekwa_video_block_main',
@@ -775,6 +791,21 @@ class EkwaVideoBlock {
             array($this, 'youtube_api_key_callback'),
             'ekwa-video-block',
             'ekwa_video_block_main'
+        );
+
+        add_settings_section(
+            'ekwa_video_block_tracking',
+            'Google Analytics 4 Tracking',
+            array($this, 'tracking_section_callback'),
+            'ekwa-video-block'
+        );
+
+        add_settings_field(
+            'ekwa_video_ga4_tracking',
+            'Enable GA4 Video Tracking',
+            array($this, 'ga4_tracking_callback'),
+            'ekwa-video-block',
+            'ekwa_video_block_tracking'
         );
     }
 
@@ -803,12 +834,45 @@ class EkwaVideoBlock {
     }
 
     /**
+     * Tracking section callback
+     */
+    public function tracking_section_callback() {
+        echo '<p>Configure Google Analytics 4 video tracking to monitor video engagement.</p>';
+        echo '<p><strong>Features:</strong></p>';
+        echo '<ul>';
+        echo '<li>Track video start events</li>';
+        echo '<li>Track video progress milestones (25%, 50%, 75%)</li>';
+        echo '<li>Track video completion</li>';
+        echo '<li>Track video pause events</li>';
+        echo '<li>Support for both YouTube and Vimeo videos</li>';
+        echo '</ul>';
+        echo '<p><em>Note: Make sure Google Analytics 4 (gtag) is installed on your website for tracking to work.</em></p>';
+    }
+
+    /**
+     * GA4 tracking field callback
+     */
+    public function ga4_tracking_callback() {
+        $ga4_tracking = get_option('ekwa_video_ga4_tracking', false);
+        echo '<input type="checkbox" id="ekwa_video_ga4_tracking" name="ekwa_video_ga4_tracking" value="1" ' . checked(1, $ga4_tracking, false) . ' />';
+        echo '<label for="ekwa_video_ga4_tracking">Enable Google Analytics 4 video tracking</label>';
+        echo '<p class="description">When enabled, video interactions will be tracked and sent to Google Analytics 4.</p>';
+    }
+
+    /**
      * Admin page
      */
     public function admin_page() {
         ?>
         <div class="wrap">
             <h1>Ekwa Video Block Settings</h1>
+
+            <?php if (isset($_GET['settings-updated']) && $_GET['settings-updated']): ?>
+                <div class="notice notice-success is-dismissible">
+                    <p><strong>Settings saved successfully!</strong></p>
+                </div>
+            <?php endif; ?>
+
             <form method="post" action="options.php">
                 <?php
                 settings_fields('ekwa_video_block_settings');
@@ -826,6 +890,39 @@ class EkwaVideoBlock {
                 </ul>
                 <p>If the API key is working, you should see the video title, description, and duration automatically populate in the block editor.</p>
             </div>
+
+            <?php
+            $ga4_tracking = get_option('ekwa_video_ga4_tracking', false);
+            if ($ga4_tracking):
+            ?>
+            <div class="card" style="margin-top: 20px;">
+                <h2>GA4 Video Tracking</h2>
+                <p><strong>✅ GA4 video tracking is enabled!</strong></p>
+                <p>The following events will be tracked:</p>
+                <ul>
+                    <li><strong>video_start:</strong> When a video begins playing</li>
+                    <li><strong>video_progress:</strong> At 25%, 50%, and 75% completion milestones</li>
+                    <li><strong>video_pause:</strong> When a video is paused</li>
+                    <li><strong>video_complete:</strong> When a video finishes playing</li>
+                </ul>
+                <p><em>Make sure Google Analytics 4 (gtag) is properly installed on your website.</em></p>
+
+                <h3>Testing GA4 Events</h3>
+                <p>To test if events are being sent:</p>
+                <ol>
+                    <li>Open your browser's Developer Tools (F12)</li>
+                    <li>Go to the Console tab</li>
+                    <li>Play a video on your site</li>
+                    <li>Look for "📊 GA4 Event (Ekwa Video):" messages in the console</li>
+                </ol>
+            </div>
+            <?php else: ?>
+            <div class="card" style="margin-top: 20px;">
+                <h2>GA4 Video Tracking</h2>
+                <p><strong>❌ GA4 video tracking is disabled.</strong></p>
+                <p>Enable it above to start tracking video engagement events in Google Analytics 4.</p>
+            </div>
+            <?php endif; ?>
         </div>
         <?php
     }

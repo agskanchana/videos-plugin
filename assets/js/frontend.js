@@ -360,7 +360,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const customEvent = new CustomEvent('ekwaVideoLoaded', {
                     detail: {
                         videoType: 'vimeo',
-                        embedUrl: embedUrl
+                        videoId: this.extractVimeoVideoId(embedUrl),
+                        embedUrl: embedUrl,
+                        player: iframe // Pass the iframe for Vimeo tracking
                     }
                 });
                 player.dispatchEvent(customEvent);
@@ -476,6 +478,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 return match ? match[1] : null;
             }
             return null;
+        }
+
+        // Instance method to extract Vimeo video ID
+        extractVimeoVideoId(url) {
+            const regExp = /(?:vimeo\.com\/)(?:.*#|.*\/videos\/)?([0-9]+)/;
+            const match = url.match(regExp);
+            return match ? match[1] : null;
         }
 
         // Utility method to format duration
