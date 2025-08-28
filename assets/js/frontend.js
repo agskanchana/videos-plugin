@@ -90,7 +90,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Create container if it doesn't exist
                 container = document.createElement('div');
                 container.className = 'ekwa-video-iframe-container';
+
+                // Pre-set container to match thumbnail dimensions to prevent flash
+                const thumbnailRect = thumbnail.getBoundingClientRect();
+                container.style.width = '100%';
+                container.style.height = thumbnailRect.height + 'px';
+                container.style.position = 'relative';
+                container.style.background = '#000';
                 container.style.display = 'none';
+
                 player.appendChild(container);
             }
 
@@ -158,14 +166,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
             console.log('Creating new YouTube player for:', videoId);
 
-            // Set proper aspect ratio for container
+            // Get thumbnail dimensions to match exactly
+            const thumbnailRect = thumbnail.getBoundingClientRect();
+            const thumbnailComputedStyle = window.getComputedStyle(thumbnail);
+
+            // Set container to match thumbnail dimensions exactly
             Object.assign(container.style, {
                 position: 'relative',
                 width: '100%',
-                paddingBottom: '56.25%',
-                height: '0',
+                height: thumbnailRect.height + 'px', // Match exact thumbnail height
                 background: '#000',
-                display: 'block'
+                display: 'none' // Keep hidden until ready
             });
 
             // Create iframe element
@@ -184,7 +195,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Hide thumbnail and show iframe
             this.fadeOut(thumbnail, 300, () => {
-                // Make sure container is visible first
+                // Show container with exact same dimensions
                 container.style.display = 'block';
 
                 // Initialize YouTube player with API for better control
@@ -237,9 +248,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                 });
             });
-        }
-
-        handleYouTubeStateChange(event, videoId, playerElement) {
+        }        handleYouTubeStateChange(event, videoId, playerElement) {
             const playerState = this.players.get(videoId);
             if (!playerState) return;
 
@@ -280,12 +289,15 @@ document.addEventListener('DOMContentLoaded', function() {
             // Instead of hiding the video, overlay the thumbnail on top
             // Keep the video container visible but overlay the thumbnail
 
-            // Position thumbnail as overlay
+            // Get container dimensions to match exactly
+            const containerRect = container.getBoundingClientRect();
+
+            // Position thumbnail as overlay with exact container dimensions
             thumbnail.style.position = 'absolute';
             thumbnail.style.top = '0';
             thumbnail.style.left = '0';
             thumbnail.style.width = '100%';
-            thumbnail.style.height = '100%';
+            thumbnail.style.height = containerRect.height + 'px'; // Match container height exactly
             thumbnail.style.zIndex = '10';
             thumbnail.style.display = 'block';
             thumbnail.style.opacity = '0';
@@ -301,9 +313,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Remove loaded class but keep video active underneath
             playerElement.classList.remove('ekwa-video-loaded');
-        }
-
-        loadVimeoPlayer(player, container, thumbnail, embedUrl) {
+        }        loadVimeoPlayer(player, container, thumbnail, embedUrl) {
             // Build iframe source with autoplay and no related content
             let iframeSrc = embedUrl;
             const separator = embedUrl.includes('?') ? '&' : '?';

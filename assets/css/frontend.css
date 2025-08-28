@@ -57,12 +57,26 @@
 .ekwa-video-player .ekwa-video-iframe-container {
     position: relative;
     z-index: 1; /* Behind thumbnail overlay */
+    /* Prevent layout shifts during loading */
+    min-height: inherit;
+    transition: none; /* Remove any container transitions that could cause flashing */
 }
 
 /* Thumbnail overlay positioning */
 .ekwa-video-player .ekwa-video-thumbnail {
     position: relative;
     z-index: 2; /* Above video when overlaying */
+    /* Ensure thumbnail maintains consistent sizing */
+    object-fit: cover;
+    transition: opacity 300ms; /* Only animate opacity, not size */
+}
+
+/* Prevent any flickering during player initialization */
+.ekwa-video-player .ekwa-video-iframe-container iframe,
+.ekwa-video-player .ekwa-video-iframe-container div[id^="player-"] {
+    transition: none;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
 }
 
 /* Video Thumbnail */
