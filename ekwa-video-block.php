@@ -711,14 +711,22 @@ class EkwaVideoBlock {
             true
         );
 
-        // Enqueue lightbox initialization script
+        wp_localize_script(
+    'ekwa-video-block-frontend',
+    'ekwaVideoData',
+    array(
+        'pluginUrl' => EKWA_VIDEO_BLOCK_PLUGIN_URL,
+    )
+);
+
+      /*  // Enqueue lightbox initialization script
         wp_enqueue_script(
             'ekwa-video-block-lightbox',
             EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/js/lightbox-init.js',
             array(),
             EKWA_VIDEO_BLOCK_VERSION,
             true
-        );
+        );*/
 
         // Conditionally enqueue GA4 tracking script
         $ga4_tracking_enabled = get_option('ekwa_video_ga4_tracking', false);
