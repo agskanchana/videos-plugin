@@ -3,7 +3,7 @@
  * Plugin Name: Ekwa Video Block
  * Plugin URI: https://www.ekwa.com
  * Description: A Gutenberg block for embedding YouTube and Vimeo videos with lazy loading and custom thumbnails
- * Version: 1.0.0
+ * Version: 1.0.9
  * Author: Ekwa Team
  * Author URI: https://www.ekwa.com
  * Text Domain: ekwa-video-block
@@ -20,8 +20,19 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+
+require 'includes/plugin-update-checker/plugin-update-checker.php';
+use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
+
+$myUpdateChecker = PucFactory::buildUpdateChecker(
+	'https://github.com/agskanchana/videos-plugin/',
+	__FILE__,
+	'ekwa-video-block'
+);
+
+
 // Define plugin constants
-define('EKWA_VIDEO_BLOCK_VERSION', '1.0.7');
+define('EKWA_VIDEO_BLOCK_VERSION', '1.0.9');
 define('EKWA_VIDEO_BLOCK_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('EKWA_VIDEO_BLOCK_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
