@@ -233,15 +233,16 @@ document.addEventListener('DOMContentLoaded', function() {
                                 // Add loaded class to player
                                 player.classList.add('ekwa-video-loaded');
 
-                                // Trigger custom event
+                                // Trigger custom event on document for GA4 tracking
                                 const customEvent = new CustomEvent('ekwaVideoLoaded', {
                                     detail: {
                                         videoType: 'youtube',
                                         videoId: videoId,
-                                        player: ytPlayer
+                                        player: ytPlayer,
+                                        playerElement: player // Also pass the player element
                                     }
                                 });
-                                player.dispatchEvent(customEvent);
+                                document.dispatchEvent(customEvent);
                             },
                             onStateChange: (stateEvent) => {
                                 this.handleYouTubeStateChange(stateEvent, videoId, player);
@@ -369,16 +370,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Add loaded class to player
                 player.classList.add('ekwa-video-loaded');
 
-                // Trigger custom event
+                // Trigger custom event on document for GA4 tracking
                 const customEvent = new CustomEvent('ekwaVideoLoaded', {
                     detail: {
                         videoType: 'vimeo',
                         videoId: this.extractVimeoVideoId(embedUrl),
                         embedUrl: embedUrl,
-                        player: iframe // Pass the iframe for Vimeo tracking
+                        player: iframe, // Pass the iframe for Vimeo tracking
+                        playerElement: player // Also pass the player element
                     }
                 });
-                player.dispatchEvent(customEvent);
+                document.dispatchEvent(customEvent);
             });
         }
 

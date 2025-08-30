@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('EKWA_VIDEO_BLOCK_VERSION', '1.0.5');
+define('EKWA_VIDEO_BLOCK_VERSION', '1.0.7');
 define('EKWA_VIDEO_BLOCK_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('EKWA_VIDEO_BLOCK_PLUGIN_PATH', plugin_dir_path(__FILE__));
 

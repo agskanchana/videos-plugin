@@ -243,8 +243,9 @@
 
         // Listen for the custom video loaded event from the main frontend.js
         document.addEventListener('ekwaVideoLoaded', function(e) {
-            const { videoType, videoId, player, embedUrl } = e.detail;
-            const videoElement = e.target;
+            const { videoType, videoId, player, embedUrl, playerElement } = e.detail;
+            // Use playerElement if available, otherwise fall back to e.target
+            const videoElement = playerElement || e.target;
             const videoTitle = extractVideoTitle(videoElement);
 
             console.log('🎯 GA4 Video Tracking: Video loaded event received');
@@ -252,6 +253,7 @@
             console.log('🆔 Video ID:', videoId);
             console.log('📝 Video Title:', videoTitle);
             console.log('🎬 Player Object:', player);
+            console.log('🏠 Player Element:', videoElement);
 
             if (videoType === 'youtube' && player) {
                 console.log('▶️ Setting up YouTube tracking...');
