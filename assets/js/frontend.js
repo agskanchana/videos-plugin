@@ -148,6 +148,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 thumbnail.style.zIndex = '';
                 thumbnail.style.display = 'none';
 
+                // Clear overlay state
+                thumbnail.dataset.overlayActive = 'false';
+
                 // Show the player container
                 container.style.display = 'block';
                 playerElement.classList.add('ekwa-video-loaded');
@@ -166,15 +169,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
             console.log('Creating new YouTube player for:', videoId);
 
-            // Get thumbnail dimensions to match exactly
-            const thumbnailRect = thumbnail.getBoundingClientRect();
-            const thumbnailComputedStyle = window.getComputedStyle(thumbnail);
+            // Calculate proper height based on wrapper width and 16:9 aspect ratio
+            const wrapper = player.closest('.ekwa-video-wrapper, .ekv-wrapper');
+            const wrapperWidth = wrapper ? wrapper.offsetWidth : player.offsetWidth;
+            const aspectRatio = 9 / 16; // height / width for 16:9
+            const calculatedHeight = wrapperWidth * aspectRatio;
 
-            // Set container to match thumbnail dimensions exactly
+            // Set container to match calculated dimensions
             Object.assign(container.style, {
                 position: 'relative',
                 width: '100%',
-                height: thumbnailRect.height + 'px', // Match exact thumbnail height
+                height: calculatedHeight + 'px',
                 background: '#000',
                 display: 'none' // Keep hidden until ready
             });
@@ -304,6 +309,9 @@ document.addEventListener('DOMContentLoaded', function() {
             thumbnail.style.transition = 'opacity 300ms';
             thumbnail.style.cursor = 'pointer';
 
+            // Store overlay state for resize handling
+            thumbnail.dataset.overlayActive = 'true';
+
             // Make sure the player container is positioned relative
             playerElement.style.position = 'relative';
 
@@ -329,12 +337,17 @@ document.addEventListener('DOMContentLoaded', function() {
             iframe.height = '100%';
             iframe.className = 'ekwa-video-iframe';
 
-            // Set proper aspect ratio for container
+            // Calculate proper height based on wrapper width and 16:9 aspect ratio
+            const wrapper = player.closest('.ekwa-video-wrapper, .ekv-wrapper');
+            const wrapperWidth = wrapper ? wrapper.offsetWidth : player.offsetWidth;
+            const aspectRatio = 9 / 16; // height / width for 16:9
+            const calculatedHeight = wrapperWidth * aspectRatio;
+
+            // Set container to match calculated dimensions
             Object.assign(container.style, {
                 position: 'relative',
                 width: '100%',
-                paddingBottom: '56.25%',
-                height: '0',
+                height: calculatedHeight + 'px',
                 background: '#000'
             });
 
@@ -555,11 +568,56 @@ document.addEventListener('DOMContentLoaded', function() {
     function handleResponsiveVideos() {
         document.querySelectorAll('.ekwa-video-wrapper, .ekv-wrapper').forEach(function(wrapper) {
             const player = wrapper.querySelector('.ekwa-video-player, .player');
-            const iframe = player ? player.querySelector('iframe') : null;
+            const container = player ? player.querySelector('.ekwa-video-iframe-container') : null;
 
-            if (iframe) {
-                const aspectRatio = (iframe.getAttribute('height') || 9) / (iframe.getAttribute('width') || 16) * 100;
-                player.style.paddingBottom = aspectRatio + '%';
+            if (container) {
+                // Calculate proper height based on current wrapper width and 16:9 aspect ratio
+                const wrapperWidth = wrapper.offsetWidth;
+                const aspectRatio = 9 / 16; // height / width for 16:9
+                const calculatedHeight = wrapperWidth * aspectRatio;
+
+                // Always update container height (whether loaded or not)
+                container.style.height = calculatedHeight + 'px';
+                container.style.paddingBottom = '0';
+
+                // Force a style recalculation
+                container.offsetHeight;
+
+                console.log('Responsive update - Wrapper Width:', wrapperWidth, 'Calculated Height:', calculatedHeight, 'Applied Height:', container.style.height);
+
+                // If there's an iframe inside, make sure it fills the container
+                const iframe = container.querySelector('iframe, div[id^="player-"]');
+                if (iframe) {
+                    iframe.style.width = '100%';
+                    iframe.style.height = '100%';
+                    console.log('Updated iframe dimensions');
+                }
+            }
+        });
+    }
+
+    // Add function to reposition thumbnail overlays after resize
+    function repositionThumbnailOverlays() {
+        // Find all videos that have thumbnail overlays active
+        document.querySelectorAll('.ekwa-video-player, .player').forEach(function(player) {
+            const container = player.querySelector('.ekwa-video-iframe-container');
+            const thumbnail = player.querySelector('.ekwa-video-thumbnail');
+
+            if (container && thumbnail && thumbnail.dataset.overlayActive === 'true') {
+                // This means the thumbnail is currently overlaying the video
+                const containerRect = container.getBoundingClientRect();
+
+                // Update thumbnail dimensions to match current container size
+                thumbnail.style.height = containerRect.height + 'px';
+
+                // Ensure positioning is still correct
+                thumbnail.style.position = 'absolute';
+                thumbnail.style.top = '0';
+                thumbnail.style.left = '0';
+                thumbnail.style.width = '100%';
+                thumbnail.style.zIndex = '10';
+
+                console.log('Repositioned thumbnail overlay - Height:', containerRect.height);
             }
         });
     }
@@ -568,11 +626,27 @@ document.addEventListener('DOMContentLoaded', function() {
     let resizeTimeout;
     window.addEventListener('resize', function() {
         clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(handleResponsiveVideos, 250);
+        resizeTimeout = setTimeout(function() {
+            console.log('Window resized, updating videos...');
+            handleResponsiveVideos();
+            // Fix thumbnail overlays after resize
+            repositionThumbnailOverlays();
+        }, 100); // Reduced from 250ms for more responsive feel
     });
 
     // Initialize responsive handling
     handleResponsiveVideos();
+
+    // Expose functions for debugging
+    window.EkwaVideoDebug = {
+        handleResponsiveVideos: handleResponsiveVideos,
+        repositionThumbnailOverlays: repositionThumbnailOverlays,
+        forceUpdate: function() {
+            console.log('=== FORCING VIDEO UPDATE ===');
+            handleResponsiveVideos();
+            repositionThumbnailOverlays();
+        }
+    };
 });
 
 /**

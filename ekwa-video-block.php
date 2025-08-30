@@ -42,6 +42,7 @@ class EkwaVideoBlock {
         add_action('init', array($this, 'init'));
         add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_assets'));
         add_action('wp_head', array($this, 'inline_critical_css'), 5);
+        add_action('wp_footer', array($this, 'lazy_load_frontend_script'), 5);
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
     }
@@ -850,33 +851,156 @@ class EkwaVideoBlock {
             );
         }
 
-        wp_enqueue_script(
-            'ekwa-video-block-frontend',
-            EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/js/frontend.js',
-            array(),
-            EKWA_VIDEO_BLOCK_VERSION,
-            true
-        );
+        // Frontend.js will be lazy loaded via inline script in footer
+        // No need to enqueue or localize here
+    }
 
-        wp_localize_script(
-            'ekwa-video-block-frontend',
-            'ekwaVideoData',
-            array(
-                'pluginUrl' => EKWA_VIDEO_BLOCK_PLUGIN_URL,
-            )
-        );
-
-        // Conditionally enqueue GA4 tracking script
-        $ga4_tracking_enabled = get_option('ekwa_video_ga4_tracking', false);
-        if ($ga4_tracking_enabled) {
-            wp_enqueue_script(
-                'ekwa-video-block-ga4-tracking',
-                EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/js/ga4-tracking.js',
-                array('ekwa-video-block-frontend'),
-                EKWA_VIDEO_BLOCK_VERSION,
-                true
-            );
+    /**
+     * Lazy load frontend script in footer if video blocks are present
+     */
+    public function lazy_load_frontend_script() {
+        // Don't run in admin or AJAX requests
+        if (is_admin() || wp_doing_ajax()) {
+            return;
         }
+
+        // Only output if we have video blocks on the page
+        if (!self::$has_video_blocks) {
+            return;
+        }
+
+        $frontend_js_url = EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/js/frontend.js';
+        $ga4_tracking_url = EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/js/ga4-tracking.js';
+        $ga4_enabled = get_option('ekwa_video_ga4_tracking', false) ? 'true' : 'false';
+        $version = EKWA_VIDEO_BLOCK_VERSION;
+        ?>
+        <script id="ekwa-video-lazy-loader">
+        (function() {
+            'use strict';
+
+            let scriptsLoaded = false;
+
+            // Configuration
+            const config = {
+                frontendJsUrl: '<?php echo esc_js($frontend_js_url); ?>?ver=<?php echo esc_js($version); ?>',
+                ga4TrackingUrl: '<?php echo esc_js($ga4_tracking_url); ?>?ver=<?php echo esc_js($version); ?>',
+                ga4Enabled: <?php echo $ga4_enabled; ?>,
+                pluginUrl: '<?php echo esc_js(EKWA_VIDEO_BLOCK_PLUGIN_URL); ?>'
+            };
+
+            // Set up ekwaVideoData globally before loading scripts
+            window.ekwaVideoData = {
+                pluginUrl: config.pluginUrl
+            };
+
+            function loadScript(url, callback) {
+                const script = document.createElement('script');
+                script.src = url;
+                script.async = true;
+                script.onload = callback || function() {};
+                script.onerror = function() {
+                    console.error('Failed to load script:', url);
+                };
+                document.head.appendChild(script);
+            }
+
+            // Override DOMContentLoaded behavior for lazy-loaded scripts
+            function wrapDOMContentLoaded() {
+                // Store the original addEventListener
+                const originalAddEventListener = Document.prototype.addEventListener;
+
+                // Override addEventListener temporarily
+                Document.prototype.addEventListener = function(type, listener, options) {
+                    if (type === 'DOMContentLoaded') {
+                        if (document.readyState === 'loading') {
+                            // DOM is still loading, use normal behavior
+                            originalAddEventListener.call(this, type, listener, options);
+                        } else {
+                            // DOM is already ready, execute immediately
+                            console.log('🔄 DOM already ready, executing listener immediately');
+                            if (typeof listener === 'function') {
+                                setTimeout(listener, 0);
+                            }
+                        }
+                    } else {
+                        // For all other events, use normal behavior
+                        originalAddEventListener.call(this, type, listener, options);
+                    }
+                };
+
+                // Restore original addEventListener after a short delay
+                setTimeout(function() {
+                    Document.prototype.addEventListener = originalAddEventListener;
+                    console.log('🔧 Restored original addEventListener');
+                }, 1000);
+            }
+
+            function loadScripts() {
+                if (scriptsLoaded) return;
+                scriptsLoaded = true;
+
+                console.log('🚀 Loading Ekwa Video scripts...');
+
+                // Override DOMContentLoaded behavior before loading scripts
+                wrapDOMContentLoaded();
+
+                // Load frontend.js first
+                loadScript(config.frontendJsUrl, function() {
+                    console.log('✅ Frontend.js loaded');
+
+                    // Load GA4 tracking if enabled
+                    if (config.ga4Enabled) {
+                        loadScript(config.ga4TrackingUrl, function() {
+                            console.log('✅ GA4 tracking loaded');
+                        });
+                    }
+                });                // Remove event listeners to prevent multiple loads
+                removeEventListeners();
+
+                // Remove this script element
+                const lazyLoader = document.getElementById('ekwa-video-lazy-loader');
+                if (lazyLoader) {
+                    lazyLoader.remove();
+                }
+            }
+
+            function removeEventListeners() {
+                window.removeEventListener('scroll', loadScripts);
+                window.removeEventListener('mousemove', loadScripts);
+                window.removeEventListener('touchstart', loadScripts);
+                window.removeEventListener('keydown', loadScripts);
+                document.removeEventListener('click', loadScripts);
+            }
+
+            // Check if video blocks exist on the page
+            function hasVideoBlocks() {
+                return document.querySelector('.ekwa-video-wrapper, .ekv-wrapper, .ekwa-video-player, .glightbox');
+            }
+
+            // Only set up lazy loading if video blocks are present
+            if (hasVideoBlocks()) {
+                // Add event listeners for user interaction
+                window.addEventListener('scroll', loadScripts, { passive: true });
+                window.addEventListener('mousemove', loadScripts, { passive: true });
+                window.addEventListener('touchstart', loadScripts, { passive: true });
+                window.addEventListener('keydown', loadScripts, { passive: true });
+                document.addEventListener('click', loadScripts, { passive: true });
+
+                // Fallback: Load after 5 seconds if no interaction
+                setTimeout(function() {
+                    if (!scriptsLoaded) {
+                        console.log('⏰ Loading scripts after timeout (no user interaction)');
+                        loadScripts();
+                    }
+                }, 5000);
+
+                console.log('🎬 Ekwa Video lazy loader initialized - scripts will load on user interaction');
+            } else {
+                console.log('ℹ️ No video blocks found, skipping script loading');
+            }
+        })();
+        </script>
+        <?php
     }
 
     /**
