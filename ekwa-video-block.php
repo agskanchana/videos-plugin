@@ -31,11 +31,17 @@ define('EKWA_VIDEO_BLOCK_PLUGIN_PATH', plugin_dir_path(__FILE__));
 class EkwaVideoBlock {
 
     /**
+     * Flag to track if video blocks are present on the page
+     */
+    private static $has_video_blocks = false;
+
+    /**
      * Constructor
      */
     public function __construct() {
         add_action('init', array($this, 'init'));
         add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_assets'));
+        add_action('wp_head', array($this, 'inline_critical_css'), 5);
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
     }
@@ -59,6 +65,60 @@ class EkwaVideoBlock {
         // Add admin menu for settings
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'admin_init'));
+
+        // Check for video blocks early in the process
+        add_action('wp', array($this, 'check_for_video_blocks'));
+    }
+
+    /**
+     * Check if the current page has video blocks
+     */
+    public function check_for_video_blocks() {
+        if (is_admin() || wp_doing_ajax()) {
+            return;
+        }
+
+        global $post;
+
+        // Check if current post/page has video blocks
+        if (is_singular() && $post) {
+            // Check for Gutenberg blocks
+            if (has_blocks($post->post_content)) {
+                if (has_block('ekwa/video-block', $post)) {
+                    self::$has_video_blocks = true;
+                    return;
+                }
+            }
+
+            // Check for shortcodes
+            if (has_shortcode($post->post_content, 'ekwa_video')) {
+                self::$has_video_blocks = true;
+                return;
+            }
+        }
+
+        // For archive pages, check all posts in the loop
+        if (is_home() || is_archive() || is_search()) {
+            $posts = get_posts(array(
+                'post_type' => 'any',
+                'posts_per_page' => 10, // Check first 10 posts for performance
+                'meta_query' => array(
+                    'relation' => 'OR',
+                    array(
+                        'key' => '_',
+                        'value' => 'ekwa/video-block',
+                        'compare' => 'LIKE'
+                    )
+                )
+            ));
+
+            foreach ($posts as $archive_post) {
+                if (has_block('ekwa/video-block', $archive_post) || has_shortcode($archive_post->post_content, 'ekwa_video')) {
+                    self::$has_video_blocks = true;
+                    return;
+                }
+            }
+        }
     }
 
     /**
@@ -201,7 +261,14 @@ class EkwaVideoBlock {
         }
 
         // Render using shortcode
-        return $this->render_video_shortcode($shortcode_atts);
+        $output = $this->render_video_shortcode($shortcode_atts);
+
+        // Mark that we have video blocks on this page
+        if (!empty($output)) {
+            self::$has_video_blocks = true;
+        }
+
+        return $output;
     }
 
     /**
@@ -272,6 +339,18 @@ class EkwaVideoBlock {
 
         // Generate unique ID for this video instance
         $unique_id = 'ekwa-video-' . md5($attributes['video_url'] . time());
+
+        // Mark that we have video blocks on this page
+        self::$has_video_blocks = true;
+
+        // If we're past wp_head and CSS hasn't been inlined yet, add it inline here
+        if (did_action('wp_head') && !did_action('wp_footer')) {
+            static $css_already_output = false;
+            if (!$css_already_output) {
+                echo $this->get_inline_css_output();
+                $css_already_output = true;
+            }
+        }
 
         // Start output buffering
         ob_start();
@@ -693,15 +772,83 @@ class EkwaVideoBlock {
     }
 
     /**
+     * Inline critical CSS in the header if video blocks are present
+     */
+    public function inline_critical_css() {
+        // Don't run in admin or AJAX requests
+        if (is_admin() || wp_doing_ajax()) {
+            return;
+        }
+
+        // Only inline CSS if we have video blocks on the page
+        if (!self::$has_video_blocks) {
+            return;
+        }
+
+        echo $this->get_inline_css_output();
+    }
+
+    /**
+     * Get inline CSS output
+     */
+    private function get_inline_css_output() {
+        $css_file_path = EKWA_VIDEO_BLOCK_PLUGIN_PATH . 'assets/css/frontend.css';
+
+        if (file_exists($css_file_path)) {
+            $css_content = file_get_contents($css_file_path);
+
+            if ($css_content !== false) {
+                $css_content = $this->minify_css($css_content);
+
+                // Check if we're in wp_head or later
+                $css_id = did_action('wp_head') ? 'ekwa-video-block-inline-css-fallback' : 'ekwa-video-block-inline-css';
+                $css_comment = did_action('wp_head') ? '/* Ekwa Video Block - Inline CSS (Fallback) */' : '/* Ekwa Video Block - Inline CSS */';
+
+                return '<style id="' . $css_id . '">' . "\n" .
+                       $css_comment . "\n" .
+                       $css_content . "\n" .
+                       '</style>' . "\n";
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Simple CSS minification
+     */
+    private function minify_css($css) {
+        // Remove comments
+        $css = preg_replace('!/\*[^*]*\*+([^/][^*]*\*+)*/!', '', $css);
+
+        // Remove unnecessary whitespace
+        $css = str_replace(array("\r\n", "\r", "\n", "\t", '  ', '    ', '    '), '', $css);
+        $css = str_replace('{ ', '{', $css);
+        $css = str_replace(' }', '}', $css);
+        $css = str_replace('; ', ';', $css);
+        $css = str_replace(', ', ',', $css);
+        $css = str_replace(' {', '{', $css);
+        $css = str_replace('} ', '}', $css);
+        $css = str_replace(': ', ':', $css);
+        $css = str_replace(' ;', ';', $css);
+
+        return trim($css);
+    }
+
+    /**
      * Enqueue frontend assets
      */
     public function enqueue_frontend_assets() {
-        wp_enqueue_style(
-            'ekwa-video-block-frontend',
-            EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/css/frontend.css',
-            array(),
-            EKWA_VIDEO_BLOCK_VERSION
-        );
+        // Don't enqueue CSS file since we're inlining it
+        // Only enqueue if we absolutely need to fall back
+        if (!self::$has_video_blocks && !is_admin()) {
+            wp_enqueue_style(
+                'ekwa-video-block-frontend',
+                EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/css/frontend.css',
+                array(),
+                EKWA_VIDEO_BLOCK_VERSION
+            );
+        }
 
         wp_enqueue_script(
             'ekwa-video-block-frontend',
@@ -712,21 +859,12 @@ class EkwaVideoBlock {
         );
 
         wp_localize_script(
-    'ekwa-video-block-frontend',
-    'ekwaVideoData',
-    array(
-        'pluginUrl' => EKWA_VIDEO_BLOCK_PLUGIN_URL,
-    )
-);
-
-      /*  // Enqueue lightbox initialization script
-        wp_enqueue_script(
-            'ekwa-video-block-lightbox',
-            EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/js/lightbox-init.js',
-            array(),
-            EKWA_VIDEO_BLOCK_VERSION,
-            true
-        );*/
+            'ekwa-video-block-frontend',
+            'ekwaVideoData',
+            array(
+                'pluginUrl' => EKWA_VIDEO_BLOCK_PLUGIN_URL,
+            )
+        );
 
         // Conditionally enqueue GA4 tracking script
         $ga4_tracking_enabled = get_option('ekwa_video_ga4_tracking', false);
@@ -739,13 +877,6 @@ class EkwaVideoBlock {
                 true
             );
         }
-
-        // Localize script with plugin data
-        wp_localize_script('ekwa-video-block-lightbox', 'ekwaVideoData', array(
-            'pluginUrl' => EKWA_VIDEO_BLOCK_PLUGIN_URL,
-            'version' => EKWA_VIDEO_BLOCK_VERSION,
-            'ga4TrackingEnabled' => $ga4_tracking_enabled,
-        ));
     }
 
     /**
