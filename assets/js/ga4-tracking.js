@@ -168,6 +168,8 @@
 
     // Setup Vimeo tracking
     function setupVimeoTracking(player, videoId, videoTitle) {
+        console.log('🎯 Setting up Vimeo tracking for:', videoId, videoTitle);
+
         const videoData = {
             id: videoId,
             title: videoTitle,
@@ -181,10 +183,14 @@
         // Get video duration
         player.getDuration().then(function(duration) {
             videoData.duration = duration;
+            console.log('📏 Vimeo video duration:', duration);
+        }).catch(function(error) {
+            console.error('❌ Failed to get Vimeo video duration:', error);
         });
 
         // Track video start
         player.on('play', function() {
+            console.log('▶️ Vimeo video started playing');
             if (!hasStarted) {
                 hasStarted = true;
                 sendGA4Event('video_start', {
@@ -205,6 +211,7 @@
 
         // Track video completion
         player.on('ended', function() {
+            console.log('🏁 Vimeo video ended');
             sendGA4Event('video_complete', {
                 video_title: videoData.title,
                 video_provider: 'vimeo',
@@ -216,6 +223,7 @@
 
         // Track video pause
         player.on('pause', function() {
+            console.log('⏸️ Vimeo video paused');
             sendGA4Event('video_pause', {
                 video_title: videoData.title,
                 video_provider: 'vimeo',
@@ -225,38 +233,54 @@
                 video_duration: Math.round(videoData.duration)
             });
         });
+
+        console.log('✅ Vimeo tracking setup complete');
     }
 
     // Initialize tracking for existing videos
     function initializeVideoTracking() {
+        console.log('🎯 GA4 Video Tracking: Initializing...');
+
         // Listen for the custom video loaded event from the main frontend.js
         document.addEventListener('ekwaVideoLoaded', function(e) {
             const { videoType, videoId, player, embedUrl } = e.detail;
             const videoElement = e.target;
             const videoTitle = extractVideoTitle(videoElement);
 
-            console.log('Setting up GA4 tracking for:', videoType, videoId, videoTitle);
+            console.log('🎯 GA4 Video Tracking: Video loaded event received');
+            console.log('📹 Video Type:', videoType);
+            console.log('🆔 Video ID:', videoId);
+            console.log('📝 Video Title:', videoTitle);
+            console.log('🎬 Player Object:', player);
 
             if (videoType === 'youtube' && player) {
+                console.log('▶️ Setting up YouTube tracking...');
                 setupYouTubeTracking(player, videoId, videoTitle);
             } else if (videoType === 'vimeo') {
+                console.log('▶️ Setting up Vimeo tracking...');
+
                 // For Vimeo, we need to wait for the Vimeo Player API to be available
                 if (typeof Vimeo !== 'undefined') {
                     try {
+                        console.log('✅ Vimeo API available, creating player...');
                         const vimeoPlayer = new Vimeo.Player(player);
                         setupVimeoTracking(vimeoPlayer, videoId, videoTitle);
                     } catch (error) {
-                        console.error('Error setting up Vimeo tracking:', error);
+                        console.error('❌ Error setting up Vimeo tracking:', error);
                     }
                 } else {
+                    console.log('⏳ Vimeo API not available, loading...');
                     // Load Vimeo API if not available
                     loadVimeoAPI().then(() => {
                         try {
+                            console.log('✅ Vimeo API loaded, creating player...');
                             const vimeoPlayer = new Vimeo.Player(player);
                             setupVimeoTracking(vimeoPlayer, videoId, videoTitle);
                         } catch (error) {
-                            console.error('Error setting up Vimeo tracking after API load:', error);
+                            console.error('❌ Error setting up Vimeo tracking after API load:', error);
                         }
+                    }).catch(error => {
+                        console.error('❌ Failed to load Vimeo API:', error);
                     });
                 }
             }
