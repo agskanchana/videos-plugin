@@ -1,235 +1,90 @@
+
 # Ekwa Video Block
 
-A modern WordPress Gutenberg block for embedding YouTube and Vimeo videos with custom thumbnails, lazy loading, and enhanced user experience.
+A modern WordPress Gutenberg block for embedding YouTube and Vimeo videos with automatic metadata, custom thumbnails, lazy loading, analytics, lightbox playback, and enhanced user experience.
+
 
 ## Features
 
-- **Gutenberg Block Integration**: Native WordPress block editor support
-- **Server-Side Rendering**: Update-friendly architecture that won't break existing blocks
-- **Video Platform Support**: YouTube and Vimeo videos
-- **Custom Thumbnails**: Upload custom video thumbnails or use auto-generated ones
-- **Lazy Loading**: Videos load only when clicked for better page performance
-- **Responsive Design**: Mobile-friendly responsive video player
-- **Schema.org Support**: Built-in structured data for SEO
-- **Accessibility**: WCAG compliant with proper focus states and keyboard navigation
-- **Shortcode Support**: `[ekwa_video]` shortcode with full attribute support
+- **Gutenberg Block Integration:** Native WordPress block editor support
+- **Automatic Metadata Fetching:** Instantly pulls video title, thumbnail, duration, and upload date from YouTube or Vimeo—no manual entry required
+- **Custom Thumbnails:** Easily upload your own thumbnail if desired
+- **Lazy Loading:** Videos only load when clicked, improving page speed and Core Web Vitals
+- **Responsive Design:** Videos look great on all devices
+- **Schema.org Structured Data:** Boosts SEO with rich video markup for both inline and lightbox videos
+- **Accessibility:** Keyboard navigation, alt text, and screen reader support
+- **GA4 Analytics Integration:** Track video engagement (start, pause, progress, complete) in Google Analytics 4
+- **Transcript Support:** Add and display video transcripts for accessibility and SEO
+- **Lightbox Video Playback:** Open videos in a popup lightbox with custom thumbnail. Even in lightbox mode, the plugin outputs full Schema.org structured data for SEO
+- **Performance Optimization:** Inline critical CSS, lazy JS loading, and image optimization
+- **Server-Side Rendering:** Reliable, SEO-friendly, and update-safe
+
 
 ## Installation
 
-1. Upload the plugin files to `/wp-content/plugins/ekwa-video-block/`
-2. Activate the plugin through the 'Plugins' screen in WordPress
-3. Use the block editor to add 'Ekwa Video' blocks to your posts/pages
+1. Download the plugin from [GitHub](https://github.com/agskanchana/videos-plugin)
+2. Upload the plugin files to `/wp-content/plugins/ekwa-video-block/`
+3. Activate the plugin through the 'Plugins' screen in WordPress
+4. (Optional) Configure YouTube API key and GA4 tracking in plugin settings
 
-## Usage
+
+## How to Use
 
 ### Gutenberg Block
 
 1. In the block editor, click the '+' button to add a new block
 2. Search for 'Ekwa Video' and select it
-3. Enter a YouTube or Vimeo URL in the sidebar settings
-4. The plugin will automatically fetch video metadata
+3. Paste a YouTube or Vimeo URL in the sidebar settings
+4. The plugin automatically fetches video metadata (title, thumbnail, duration, upload date)
 5. Optionally upload a custom thumbnail image
-6. Configure display settings (show title, description, autoplay)
-7. Publish your post/page
+6. Configure display settings (show title, description, autoplay, transcript, lightbox)
+7. **To enable lightbox playback:** Toggle the "Open in Lightbox" option. The video will open in a popup when the thumbnail is clicked, and all Schema.org structured data is included for SEO
+8. Publish your post/page
 
-### Shortcode Usage
 
-```php
-[ekwa_video
-    video_url="https://www.youtube.com/watch?v=VIDEO_ID"
-    show_title="true"
-    show_description="false"
-    autoplay="false"
-    custom_thumbnail="https://example.com/custom-thumb.jpg"
-]
-```
+## Analytics Integration
 
-#### Shortcode Parameters
-
-- `video_url` (required): YouTube or Vimeo video URL
-- `video_type`: 'youtube' or 'vimeo' (auto-detected if not provided)
-- `video_id`: Video ID (auto-extracted if not provided)
-- `embed_url`: Embed URL (auto-generated if not provided)
-- `video_title`: Custom video title
-- `video_description`: Custom video description
-- `video_duration`: Video duration in ISO 8601 format (PT1M30S)
-- `upload_date`: Video upload date
-- `thumbnail_url`: Video thumbnail URL (auto-fetched if not provided)
-- `custom_thumbnail`: URL to custom thumbnail image
-- `custom_thumbnail_alt`: Alt text for custom thumbnail
-- `show_title`: Show/hide video title (true/false)
-- `show_description`: Show/hide video description (true/false)
-- `autoplay`: Enable autoplay when video loads (true/false)
-- `class_name`: Additional CSS classes
-
-## Plugin Architecture
-
-### File Structure
-
-```
-ekwa-video-block/
-├── ekwa-video-block.php          # Main plugin file
-├── assets/
-│   ├── js/
-│   │   ├── block.js               # Gutenberg block JavaScript
-│   │   └── frontend.js            # Frontend functionality
-│   └── css/
-│       ├── editor.css             # Block editor styles
-│       └── frontend.css           # Frontend styles
-└── README.md                      # This file
-```
-
-### Key Classes and Methods
-
-#### Main Plugin Class: `EkwaVideoBlock`
-
-- `init()`: Initialize plugin hooks and registration
-- `register_block()`: Register the Gutenberg block with attributes
-- `render_block()`: Server-side block rendering (calls shortcode)
-- `render_video_shortcode()`: Main shortcode rendering logic
-- `extract_video_info()`: Extract video ID and type from URLs
-- `get_video_metadata()`: Fetch video metadata from APIs
-- `get_youtube_metadata()`: YouTube-specific metadata fetching
-- `get_vimeo_metadata()`: Vimeo-specific metadata fetching
-
-### Server-Side Rendering Benefits
-
-This plugin uses server-side rendering, which means:
-
-- **Update Friendly**: Block content is generated by PHP, so updates won't break existing blocks
-- **SEO Optimized**: Content is available to search engines immediately
-- **Performance**: No JavaScript required for basic functionality
-- **Consistency**: Same rendering logic for blocks and shortcodes
-
-## Customization
-
-### CSS Classes
-
-The plugin generates the following CSS classes for styling:
-
-- `.ekwa-video-wrapper`: Main video container
-- `.ekwa-video-title`: Video title element
-- `.ekwa-video-player`: Video player container
-- `.ekwa-video-thumbnail`: Thumbnail container
-- `.ekwa-video-thumb-img`: Thumbnail image
-- `.ekwa-video-play-button`: Play button overlay
-- `.ekwa-video-duration`: Duration display
-- `.ekwa-video-description`: Video description container
-- `.ekwa-video-youtube`: YouTube video wrapper
-- `.ekwa-video-vimeo`: Vimeo video wrapper
-
-### Custom CSS Example
-
-```css
-.ekwa-video-wrapper {
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-}
-
-.ekwa-video-title {
-    font-family: 'Your Custom Font', sans-serif;
-    color: #your-brand-color;
-}
-
-.ekwa-video-play-button:hover {
-    transform: translate(-50%, -50%) scale(1.2);
-}
-```
-
-### JavaScript Hooks
-
-The plugin triggers custom events for advanced customization:
-
-```javascript
-// Listen for video load events
-jQuery(document).on('ekwaVideoLoaded', function(e, data) {
-    console.log('Video loaded:', data.videoType, data.videoId);
-    // Your custom code here
-});
-
-// Custom analytics tracking
-jQuery(document).on('ekwa_video_analytics', function(e, data) {
-    // Send to your analytics platform
-    gtag('event', 'video_interaction', {
-        'video_type': data.videoType,
-        'video_id': data.videoId
-    });
-});
-```
-
-## API Integration
-
-### YouTube API (Optional)
-
-For enhanced YouTube metadata fetching, you can add a YouTube API key:
-
-```php
-// In your theme's functions.php or a custom plugin
-add_filter('ekwa_video_youtube_api_key', function() {
-    return 'YOUR_YOUTUBE_API_KEY';
-});
-```
-
-### Vimeo API
-
-The plugin uses Vimeo's oEmbed API which doesn't require authentication for basic metadata.
-
-## Performance Optimization
-
-### Lazy Loading
-
-Videos are loaded only when the user clicks the thumbnail, improving:
-
-- **Page Load Speed**: No heavy iframe embeds on initial page load
-- **Bandwidth Usage**: Reduces data usage, especially on mobile
-- **Core Web Vitals**: Better LCP and CLS scores
-
-### Image Optimization
-
-- Responsive images with appropriate sizing
-- WebP support when available
-- Lazy loading for video thumbnails
+- **Google Analytics 4 (GA4):**
+    Enable GA4 tracking in plugin settings to track:
+    - `video_start`
+    - `video_progress` (25%, 50%, 75%)
+    - `video_pause`
+    - `video_complete`
+- **Custom Dimensions:**
+    Register `video_title`, `video_provider`, etc. in GA4 to see which videos are played
 
 ## Accessibility Features
 
-- **Keyboard Navigation**: Full keyboard support for all interactive elements
-- **Screen Reader Support**: Proper ARIA labels and descriptions
-- **Focus Management**: Clear focus indicators
-- **Alt Text Support**: Custom alt text for thumbnails
+- Keyboard navigation
+- Screen reader support
+- Alt text for thumbnails
+- Transcript support
 
-## Browser Support
+## Performance Optimization
 
-- Modern browsers (Chrome, Firefox, Safari, Edge)
-- Internet Explorer 11+ (with polyfills)
-- Mobile browsers (iOS Safari, Chrome Mobile)
+- Lazy loading for videos and scripts
+- Inline critical CSS
+- Responsive images and thumbnails
 
 ## Changelog
 
-### Version 1.0.0
-- Initial release
-- Gutenberg block with server-side rendering
-- YouTube and Vimeo support
-- Custom thumbnail upload
-- Responsive design
-- Schema.org structured data
-- Shortcode support
-
-## Contributing
-
-This plugin follows WordPress coding standards and best practices. When contributing:
-
-1. Follow [WordPress Coding Standards](https://developer.wordpress.org/coding-standards/)
-2. Test with WordPress 5.0+ and latest Gutenberg
-3. Ensure accessibility compliance
-4. Test on multiple browsers and devices
+### Version 1.1.0
+- Automatic metadata fetching for YouTube and Vimeo
+- GA4 analytics integration
+- Transcript support
+- Lightbox video playback with Schema.org structured data
+- Improved lazy loading and performance
+- Accessibility enhancements
 
 ## Support
 
-For support and feature requests, please contact the Ekwa development team.
+For support, feature requests, or to report issues, visit:
+- [Plugin GitHub Repository](https://github.com/agskanchana/videos-plugin)
+- [Submit Issues or Suggestions](https://github.com/agskanchana/videos-plugin/issues)
 
 ## License
 
-This plugin is licensed under the GPL v2 or later.
+GPL v2 or later.
 
 ---
 
