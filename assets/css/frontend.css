@@ -297,6 +297,17 @@ a.ekwa-video-lightbox-trigger .ekwa-video-duration {
     border: none;
     cursor: pointer;
     transition: background-color 0.3s ease;
+    /* Better touch target for mobile */
+    min-height: 44px;
+    min-width: 44px;
+    /* Prevent text selection on button */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    /* Improve touch responsiveness */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
 }
 
 .btn-transcript:hover,
@@ -304,6 +315,19 @@ a.ekwa-video-lightbox-trigger .ekwa-video-duration {
     background: #005a87;
     color: #fff;
     text-decoration: none;
+}
+
+.btn-transcript:focus,
+.ekv-button:focus {
+    outline: 2px solid #007cba;
+    outline-offset: 2px;
+    background: #005a87;
+}
+
+.btn-transcript:active,
+.ekv-button:active {
+    background: #004070;
+    transform: translateY(1px);
 }
 
 .trans-icon {
@@ -414,6 +438,26 @@ a.ekwa-video-lightbox-trigger .ekwa-video-duration {
         right: 8px;
         font-size: 11px;
         padding: 2px 5px;
+    }
+
+    /* Improve transcript button on mobile */
+    .video_transcript_btn {
+        padding: 12px;
+    }
+
+    .btn-transcript,
+    .ekv-button {
+        padding: 12px 24px;
+        font-size: 16px; /* Prevent zoom on iOS */
+        min-height: 48px; /* Better touch target */
+        width: 100%; /* Full width on mobile */
+        justify-content: center;
+        text-align: center;
+    }
+
+    .transcript-wrapper-del,
+    .transcript {
+        max-height: 250px; /* Smaller max height on mobile */
     }
 }
 

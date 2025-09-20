@@ -37,9 +37,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
 
-            // Handle transcript toggle
+            // Handle transcript toggle - support both click and touch events
             document.addEventListener('click', (e) => {
                 if (e.target.closest('.btn-transcript')) {
+                    this.handleTranscriptToggle(e);
+                }
+            });
+
+            // Add touch event support for mobile devices
+            document.addEventListener('touchend', (e) => {
+                if (e.target.closest('.btn-transcript')) {
+                    e.preventDefault(); // Prevent double-firing with click event
                     this.handleTranscriptToggle(e);
                 }
             });
@@ -407,20 +415,65 @@ document.addEventListener('DOMContentLoaded', function() {
 
         handleTranscriptToggle(e) {
             e.preventDefault();
-            const button = e.target.closest('.btn-transcript');
-            const targetId = button.dataset.target;
-            const transcript = document.querySelector(targetId);
+            e.stopPropagation();
 
-            if (transcript) {
-                if (transcript.classList.contains('open')) {
-                    transcript.classList.remove('open');
-                    this.slideUp(transcript, 300);
-                    button.textContent = button.textContent.replace('Hide', 'Video');
-                } else {
-                    transcript.classList.add('open');
-                    this.slideDown(transcript, 300);
-                    button.textContent = button.textContent.replace('Video', 'Hide');
+            const button = e.target.closest('.btn-transcript');
+            if (!button) {
+                console.log('No transcript button found');
+                return;
+            }
+
+            // Get target ID from data-target attribute
+            let targetId = button.getAttribute('data-target');
+
+            // Fallback: if no data-target, try to find transcript in same container
+            if (!targetId) {
+                const videoWrapper = button.closest('.ekwa-video-wrapper, .ekv-wrapper');
+                const transcript = videoWrapper ? videoWrapper.querySelector('.transcript-wrapper-del, .transcript') : null;
+                if (transcript) {
+                    targetId = '#' + transcript.id;
                 }
+            }
+
+            console.log('Target ID:', targetId);
+            const transcript = targetId ? document.querySelector(targetId) : null;
+
+            if (!transcript) {
+                console.error('Transcript element not found for target:', targetId);
+                return;
+            }
+
+            console.log('Transcript element found:', transcript);
+
+            // Check current state
+            const isOpen = transcript.classList.contains('open') || transcript.style.display === 'block';
+
+            if (isOpen) {
+                // Close transcript
+                transcript.classList.remove('open');
+                this.slideUp(transcript, 300);
+
+                // Update button text
+                const buttonText = button.textContent || button.innerText;
+                if (buttonText.includes('Hide')) {
+                    button.innerHTML = button.innerHTML.replace('Hide', 'Video');
+                }
+                button.setAttribute('aria-expanded', 'false');
+
+                console.log('Transcript closed');
+            } else {
+                // Open transcript
+                transcript.classList.add('open');
+                this.slideDown(transcript, 300);
+
+                // Update button text
+                const buttonText = button.textContent || button.innerText;
+                if (buttonText.includes('Video')) {
+                    button.innerHTML = button.innerHTML.replace('Video', 'Hide');
+                }
+                button.setAttribute('aria-expanded', 'true');
+
+                console.log('Transcript opened');
             }
         }
 
@@ -440,44 +493,80 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         slideUp(element, duration) {
-            element.style.transition = `max-height ${duration}ms ease-out, padding ${duration}ms ease-out`;
-            element.style.overflow = 'hidden';
-            element.style.maxHeight = element.scrollHeight + 'px';
+            console.log('Sliding up transcript');
 
+            // Store original styles
+            const originalHeight = element.scrollHeight;
+            const originalPadding = window.getComputedStyle(element).padding;
+
+            // Set initial state for animation
+            element.style.transition = `height ${duration}ms ease-out, padding ${duration}ms ease-out, opacity ${duration}ms ease-out`;
+            element.style.overflow = 'hidden';
+            element.style.height = originalHeight + 'px';
+            element.style.opacity = '1';
+
+            // Force reflow
+            element.offsetHeight;
+
+            // Start animation
             requestAnimationFrame(() => {
-                element.style.maxHeight = '0';
+                element.style.height = '0px';
                 element.style.paddingTop = '0';
                 element.style.paddingBottom = '0';
+                element.style.opacity = '0';
             });
 
+            // Clean up after animation
             setTimeout(() => {
                 element.style.display = 'none';
                 element.style.transition = '';
                 element.style.overflow = '';
-                element.style.maxHeight = '';
+                element.style.height = '';
                 element.style.paddingTop = '';
                 element.style.paddingBottom = '';
+                element.style.opacity = '';
+                console.log('Slide up complete');
             }, duration);
         }
 
         slideDown(element, duration) {
+            console.log('Sliding down transcript');
+
+            // Show element to measure height
+            const originalDisplay = element.style.display;
+            element.style.visibility = 'hidden';
             element.style.display = 'block';
-            element.style.transition = `max-height ${duration}ms ease-out, padding ${duration}ms ease-out`;
-            element.style.overflow = 'hidden';
-            element.style.maxHeight = '0';
+            element.style.height = 'auto';
+
+            const targetHeight = element.scrollHeight;
+
+            // Reset to starting state
+            element.style.visibility = '';
+            element.style.height = '0px';
             element.style.paddingTop = '0';
             element.style.paddingBottom = '0';
+            element.style.opacity = '0';
+            element.style.overflow = 'hidden';
+            element.style.transition = `height ${duration}ms ease-out, padding ${duration}ms ease-out, opacity ${duration}ms ease-out`;
 
+            // Force reflow
+            element.offsetHeight;
+
+            // Start animation
             requestAnimationFrame(() => {
-                element.style.maxHeight = element.scrollHeight + 'px';
+                element.style.height = targetHeight + 'px';
                 element.style.paddingTop = '';
                 element.style.paddingBottom = '';
+                element.style.opacity = '1';
             });
 
+            // Clean up after animation
             setTimeout(() => {
                 element.style.transition = '';
                 element.style.overflow = '';
-                element.style.maxHeight = '';
+                element.style.height = '';
+                element.style.opacity = '';
+                console.log('Slide down complete');
             }, duration);
         }
 
