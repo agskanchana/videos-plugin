@@ -308,6 +308,11 @@ a.ekwa-video-lightbox-trigger .ekwa-video-duration {
     /* Improve touch responsiveness */
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
+    /* Ensure pointer events work */
+    pointer-events: auto;
+    /* Force hardware acceleration */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
 .btn-transcript:hover,
@@ -328,6 +333,13 @@ a.ekwa-video-lightbox-trigger .ekwa-video-duration {
 .ekv-button:active {
     background: #004070;
     transform: translateY(1px);
+}
+
+.btn-transcript.touching,
+.ekv-button.touching {
+    background: #004070;
+    transform: scale(0.98);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .trans-icon {

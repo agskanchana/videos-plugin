@@ -37,19 +37,126 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
 
-            // Handle transcript toggle - support both click and touch events
+            // Direct event listeners for transcript buttons (fallback method)
+            this.bindTranscriptButtons();
+
+            // Handle transcript toggle - comprehensive event handling for all devices
             document.addEventListener('click', (e) => {
-                if (e.target.closest('.btn-transcript')) {
+                console.log('Click event detected:', e.target, e.currentTarget);
+                const transcriptBtn = e.target.closest('.btn-transcript');
+                if (transcriptBtn) {
+                    console.log('Transcript button found via click event');
                     this.handleTranscriptToggle(e);
                 }
             });
 
-            // Add touch event support for mobile devices
-            document.addEventListener('touchend', (e) => {
-                if (e.target.closest('.btn-transcript')) {
-                    e.preventDefault(); // Prevent double-firing with click event
-                    this.handleTranscriptToggle(e);
+            // Enhanced touch event support for mobile devices (iPhone specifically)
+            let touchStartTime = 0;
+            let touchTarget = null;
+
+            document.addEventListener('touchstart', (e) => {
+                console.log('Touch start detected:', e.target);
+                const transcriptBtn = e.target.closest('.btn-transcript');
+                if (transcriptBtn) {
+                    touchStartTime = Date.now();
+                    touchTarget = transcriptBtn;
+                    console.log('Touch start on transcript button');
                 }
+            }, { passive: false });
+
+            document.addEventListener('touchend', (e) => {
+                console.log('Touch end detected:', e.target);
+                const transcriptBtn = e.target.closest('.btn-transcript');
+                if (transcriptBtn || touchTarget) {
+                    const touchDuration = Date.now() - touchStartTime;
+                    console.log('Touch duration:', touchDuration);
+
+                    // Only handle if it's a tap (not a long press or scroll)
+                    if (touchDuration < 500) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Processing touch as transcript toggle');
+                        this.handleTranscriptToggle(e, transcriptBtn || touchTarget);
+                    }
+                }
+                touchStartTime = 0;
+                touchTarget = null;
+            }, { passive: false });
+        }
+
+        bindTranscriptButtons() {
+            console.log('Binding transcript buttons directly');
+
+            // Bind existing transcript buttons
+            document.querySelectorAll('.btn-transcript').forEach(button => {
+                console.log('Found transcript button:', button);
+
+                // Remove existing listeners to prevent duplicates
+                button.removeEventListener('click', this.directTranscriptHandler);
+                button.removeEventListener('touchend', this.directTranscriptHandler);
+
+                // Create bound handler
+                this.directTranscriptHandler = (e) => {
+                    console.log('Direct transcript handler fired:', e.type);
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.handleTranscriptToggle(e, button);
+                };
+
+                // Add listeners
+                button.addEventListener('click', this.directTranscriptHandler);
+                button.addEventListener('touchend', this.directTranscriptHandler);
+            });
+
+            // Set up mutation observer for dynamically added buttons
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType === 1) {
+                            // Check if the added node is a transcript button
+                            if (node.classList && node.classList.contains('btn-transcript')) {
+                                console.log('New transcript button detected:', node);
+                                this.bindSingleTranscriptButton(node);
+                            }
+                            // Check if the added node contains transcript buttons
+                            const buttons = node.querySelectorAll && node.querySelectorAll('.btn-transcript');
+                            if (buttons && buttons.length > 0) {
+                                buttons.forEach(button => {
+                                    console.log('New transcript button in added content:', button);
+                                    this.bindSingleTranscriptButton(button);
+                                });
+                            }
+                        }
+                    });
+                });
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        }
+
+        bindSingleTranscriptButton(button) {
+            console.log('Binding single transcript button:', button);
+
+            // Create bound handler for this specific button
+            const handler = (e) => {
+                console.log('Single button handler fired:', e.type, button);
+                e.preventDefault();
+                e.stopPropagation();
+                this.handleTranscriptToggle(e, button);
+            };
+
+            // Add listeners
+            button.addEventListener('click', handler);
+            button.addEventListener('touchend', handler, { passive: false });
+            button.addEventListener('touchstart', (e) => {
+                console.log('Touch start on button:', button);
+                button.classList.add('touching');
+            });
+            button.addEventListener('touchend', (e) => {
+                button.classList.remove('touching');
             });
         }
 
@@ -413,13 +520,35 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        handleTranscriptToggle(e) {
-            e.preventDefault();
-            e.stopPropagation();
+        handleTranscriptToggle(e, forcedButton = null) {
+            console.log('=== TRANSCRIPT TOGGLE START ===');
+            console.log('Event type:', e.type);
+            console.log('Event target:', e.target);
+            console.log('Forced button:', forcedButton);
 
-            const button = e.target.closest('.btn-transcript');
+            if (e && e.preventDefault) {
+                e.preventDefault();
+            }
+            if (e && e.stopPropagation) {
+                e.stopPropagation();
+            }
+
+            // Try multiple ways to find the button
+            let button = forcedButton;
+            if (!button && e.target) {
+                button = e.target.closest('.btn-transcript');
+            }
+            if (!button && e.currentTarget) {
+                button = e.currentTarget.closest('.btn-transcript');
+            }
             if (!button) {
-                console.log('No transcript button found');
+                button = document.querySelector('.btn-transcript');
+            }
+
+            console.log('Final button found:', button);
+
+            if (!button) {
+                console.error('No transcript button found anywhere');
                 return;
             }
 
@@ -444,6 +573,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             console.log('Transcript element found:', transcript);
+
+            // Add visual feedback for testing (temporary)
+            button.style.backgroundColor = '#ff0000';
+            setTimeout(() => {
+                button.style.backgroundColor = '';
+            }, 200);
 
             // Check current state
             const isOpen = transcript.classList.contains('open') || transcript.style.display === 'block';
