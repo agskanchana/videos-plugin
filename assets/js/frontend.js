@@ -574,12 +574,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
             console.log('Transcript element found:', transcript);
 
-            // Add visual feedback for testing (temporary)
-            button.style.backgroundColor = '#ff0000';
-            setTimeout(() => {
-                button.style.backgroundColor = '';
-            }, 200);
-
             // Check current state
             const isOpen = transcript.classList.contains('open') || transcript.style.display === 'block';
 
