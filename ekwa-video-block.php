@@ -3,7 +3,7 @@
  * Plugin Name: Ekwa Video Block
  * Plugin URI: https://www.ekwa.com
  * Description: A Gutenberg block for embedding YouTube and Vimeo videos with lazy loading and custom thumbnails
- * Version: 1.1.6
+ * Version: 1.1.7
  * Author: Ekwa Team
  * Author URI: https://www.ekwa.com
  * Text Domain: ekwa-video-block
@@ -32,7 +32,7 @@ $myUpdateChecker = PucFactory::buildUpdateChecker(
 
 
 // Define plugin constants
-define('EKWA_VIDEO_BLOCK_VERSION', '1.1.6
+define('EKWA_VIDEO_BLOCK_VERSION', '1.1.7
 ');
 define('EKWA_VIDEO_BLOCK_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('EKWA_VIDEO_BLOCK_PLUGIN_PATH', plugin_dir_path(__FILE__));
@@ -411,12 +411,20 @@ class EkwaVideoBlock {
                             <?php
                             // Get thumbnail dimensions for better performance (prevent layout shift)
                             $thumb_dimensions = $this->get_thumbnail_dimensions($thumbnail_url, $attributes['video_type'], $attributes['custom_thumbnail']);
+
+                            // Check if active theme is "ekwa"
+                            $current_theme = wp_get_theme();
+                            $is_ekwa_theme = (strtolower($current_theme->get('TextDomain')) === 'ekwa' || strtolower($current_theme->get('Name')) === 'ekwa');
+
+                            // Use data-src and lazyload class only for ekwa theme
+                            $img_src_attr = $is_ekwa_theme ? 'data-src' : 'src';
+                            $img_classes = $is_ekwa_theme ? 'image-responsive ekwa-video-thumb-img lazyload' : 'image-responsive ekwa-video-thumb-img';
                             ?>
-                            <img data-src="<?php echo esc_url($thumbnail_url); ?>"
+                            <img <?php echo $img_src_attr; ?>="<?php echo esc_url($thumbnail_url); ?>"
                                  alt="<?php echo esc_attr($thumbnail_alt); ?>"
                                  width="<?php echo esc_attr($thumb_dimensions['width']); ?>"
                                  height="<?php echo esc_attr($thumb_dimensions['height']); ?>"
-                                 class="image-responsive ekwa-video-thumb-img lazyload">
+                                 class="<?php echo esc_attr($img_classes); ?>">
                             <span class="playicon ekwa-video-play-button">
                                 <svg width="68" height="48" viewBox="0 0 68 48">
                                     <path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.63-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="#f00"></path>
