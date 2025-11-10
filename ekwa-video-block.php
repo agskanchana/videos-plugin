@@ -3,7 +3,7 @@
  * Plugin Name: Ekwa Video Block
  * Plugin URI: https://www.ekwa.com
  * Description: A Gutenberg block for embedding YouTube and Vimeo videos with lazy loading and custom thumbnails
- * Version: 1.1.4
+ * Version: 1.1.5
  * Author: Ekwa Team
  * Author URI: https://www.ekwa.com
  * Text Domain: ekwa-video-block
@@ -32,7 +32,7 @@ $myUpdateChecker = PucFactory::buildUpdateChecker(
 
 
 // Define plugin constants
-define('EKWA_VIDEO_BLOCK_VERSION', '1.1.4');
+define('EKWA_VIDEO_BLOCK_VERSION', '1.1.5');
 define('EKWA_VIDEO_BLOCK_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('EKWA_VIDEO_BLOCK_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
@@ -407,8 +407,14 @@ class EkwaVideoBlock {
                        data-show-transcript="<?php echo esc_attr($attributes['show_transcript']); ?>"
                        data-video-id="<?php echo esc_attr($attributes['video_id']); ?>">
                         <?php if (!empty($thumbnail_url)): ?>
+                            <?php
+                            // Get thumbnail dimensions for better performance (prevent layout shift)
+                            $thumb_dimensions = $this->get_thumbnail_dimensions($thumbnail_url, $attributes['video_type'], $attributes['custom_thumbnail']);
+                            ?>
                             <img src="<?php echo esc_url($thumbnail_url); ?>"
                                  alt="<?php echo esc_attr($thumbnail_alt); ?>"
+                                 width="<?php echo esc_attr($thumb_dimensions['width']); ?>"
+                                 height="<?php echo esc_attr($thumb_dimensions['height']); ?>"
                                  class="image-responsive ekwa-video-thumb-img">
                             <span class="playicon ekwa-video-play-button">
                                 <svg width="68" height="48" viewBox="0 0 68 48">
@@ -429,8 +435,17 @@ class EkwaVideoBlock {
                     <!-- Regular Inline Player -->
                     <div class="player ekwa-video-player" data-id="<?php echo esc_attr($attributes['video_id']); ?>" data-provider="<?php echo esc_attr($attributes['video_type']); ?>" data-video-type="<?php echo esc_attr($attributes['video_type']); ?>" data-video-id="<?php echo esc_attr($attributes['video_id']); ?>" data-autoplay="<?php echo esc_attr($attributes['autoplay']); ?>">
                         <?php if (!empty($thumbnail_url)): ?>
+                            <?php
+                            // Get thumbnail dimensions for better performance (prevent layout shift)
+                            $thumb_dimensions = $this->get_thumbnail_dimensions($thumbnail_url, $attributes['video_type'], $attributes['custom_thumbnail']);
+                            ?>
                             <div class="ekwa-video-thumbnail" data-embed-url="<?php echo esc_attr($attributes['embed_url']); ?>">
-                                <img decoding="async" class="image-responsive ls-is-cached lazyloaded ekwa-video-thumb-img" src="<?php echo esc_url($thumbnail_url); ?>" alt="<?php echo esc_attr($thumbnail_alt); ?>">
+                                <img decoding="async"
+                                     class="image-responsive ls-is-cached lazyloaded ekwa-video-thumb-img"
+                                     src="<?php echo esc_url($thumbnail_url); ?>"
+                                     alt="<?php echo esc_attr($thumbnail_alt); ?>"
+                                     width="<?php echo esc_attr($thumb_dimensions['width']); ?>"
+                                     height="<?php echo esc_attr($thumb_dimensions['height']); ?>">
                                 <span class="playicon ekwa-video-play-button">
                                     <svg width="68" height="48" viewBox="0 0 68 48">
                                         <path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.63-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="#f00"></path>
@@ -735,6 +750,93 @@ class EkwaVideoBlock {
 
         // Convert to ISO 8601 format with Z suffix (UTC)
         return $date->format('Y-m-d\TH:i:s\Z');
+    }
+
+    /**
+     * Get thumbnail dimensions for width/height attributes
+     * Returns array with width and height for 16:9 aspect ratio
+     */
+    private function get_thumbnail_dimensions($thumbnail_url, $video_type, $custom_thumbnail) {
+        $dimensions = array(
+            'width' => 1280,
+            'height' => 720
+        );
+
+        // If custom thumbnail is used and has dimensions stored
+        if (!empty($custom_thumbnail) && is_array($custom_thumbnail)) {
+            if (isset($custom_thumbnail['width']) && isset($custom_thumbnail['height'])) {
+                $dimensions['width'] = $custom_thumbnail['width'];
+                $dimensions['height'] = $custom_thumbnail['height'];
+                return $dimensions;
+            }
+
+            // If custom thumbnail has ID, try to get dimensions from attachment
+            if (isset($custom_thumbnail['id'])) {
+                $attachment_id = $custom_thumbnail['id'];
+                $image_meta = wp_get_attachment_metadata($attachment_id);
+                if ($image_meta && isset($image_meta['width']) && isset($image_meta['height'])) {
+                    $dimensions['width'] = $image_meta['width'];
+                    $dimensions['height'] = $image_meta['height'];
+                    return $dimensions;
+                }
+            }
+        }
+
+        // For YouTube thumbnails
+        if ($video_type === 'youtube') {
+            // YouTube maxresdefault is 1280x720
+            if (strpos($thumbnail_url, 'maxresdefault') !== false) {
+                $dimensions['width'] = 1280;
+                $dimensions['height'] = 720;
+            }
+            // YouTube hqdefault is 480x360
+            elseif (strpos($thumbnail_url, 'hqdefault') !== false) {
+                $dimensions['width'] = 480;
+                $dimensions['height'] = 360;
+            }
+            // YouTube sddefault is 640x480
+            elseif (strpos($thumbnail_url, 'sddefault') !== false) {
+                $dimensions['width'] = 640;
+                $dimensions['height'] = 480;
+            }
+            // Default YouTube thumbnail
+            else {
+                $dimensions['width'] = 1280;
+                $dimensions['height'] = 720;
+            }
+        }
+        // For Vimeo thumbnails - extract dimensions from URL
+        elseif ($video_type === 'vimeo') {
+            // Vimeo thumbnail URLs often contain dimensions like: _640 or _1280x720
+            // Example: https://i.vimeocdn.com/video/xxxxx-d_640
+            // Example: https://i.vimeocdn.com/video/xxxxx_1280x720
+
+            // Try to extract dimensions from URL pattern like _640 or _1280x720
+            if (preg_match('/_(\d+)x(\d+)/', $thumbnail_url, $matches)) {
+                // Found explicit width x height in URL
+                $dimensions['width'] = (int)$matches[1];
+                $dimensions['height'] = (int)$matches[2];
+            }
+            elseif (preg_match('/_d?_?(\d+)(?:\?|$)/', $thumbnail_url, $matches)) {
+                // Found width only (like _640 or _d_640)
+                // Calculate height based on 16:9 ratio
+                $width = (int)$matches[1];
+                $dimensions['width'] = $width;
+                $dimensions['height'] = round($width * 9 / 16);
+            }
+            elseif (preg_match('/(\d+)x(\d+)/', $thumbnail_url, $matches)) {
+                // Fallback: any WIDTHxHEIGHT pattern in URL
+                $dimensions['width'] = (int)$matches[1];
+                $dimensions['height'] = (int)$matches[2];
+            }
+            else {
+                // Default to standard HD resolution if no dimensions found
+                $dimensions['width'] = 640;
+                $dimensions['height'] = 360;
+            }
+        }
+
+        return $dimensions;
     }
 
     /**
