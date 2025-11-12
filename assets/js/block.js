@@ -674,7 +674,66 @@ registerBlockType('ekwa/video-block', {
                 el('p', {}, el('strong', {}, __('Type:', 'ekwa-video-block')), ' ', videoType),
                 el('p', {}, el('strong', {}, __('Video ID:', 'ekwa-video-block')), ' ', videoId),
                 videoDuration && el('p', {}, el('strong', {}, __('Duration:', 'ekwa-video-block')), ' ', videoDuration),
-                uploadDate && el('p', {}, el('strong', {}, __('Upload Date:', 'ekwa-video-block')), ' ', uploadDate)
+                uploadDate && el('p', {}, el('strong', {}, __('Upload Date:', 'ekwa-video-block')), ' ', uploadDate),
+
+                // Shortcode Generator
+                el('div', {
+                    style: { marginTop: '20px', padding: '15px', background: '#f0f0f1', borderRadius: '4px' }
+                },
+                    el('p', { style: { marginTop: '0', fontWeight: 'bold' } }, __('Shortcode:', 'ekwa-video-block')),
+                    el('textarea', {
+                        readOnly: true,
+                        value: (() => {
+                            // Build shortcode based on current settings
+                            let shortcode = '[ekwa_video';
+                            shortcode += ' video_url="' + videoUrl + '"';
+
+                            if (showTitle !== true) {
+                                shortcode += ' show_title="false"';
+                            }
+                            if (showDescription === true) {
+                                shortcode += ' show_description="true"';
+                            }
+                            if (autoplay === true) {
+                                shortcode += ' autoplay="true"';
+                            }
+                            if (openInLightbox === true) {
+                                shortcode += ' open_in_lightbox="true"';
+                            }
+                            if (showTranscript === true && transcript) {
+                                shortcode += ' show_transcript="true"';
+                            }
+                            if (customThumbnail && customThumbnail.url) {
+                                shortcode += ' custom_thumbnail="' + customThumbnail.url + '"';
+                            }
+
+                            shortcode += ']';
+                            return shortcode;
+                        })(),
+                        style: {
+                            width: '100%',
+                            minHeight: '80px',
+                            fontFamily: 'monospace',
+                            fontSize: '12px',
+                            padding: '8px',
+                            border: '1px solid #ccc',
+                            borderRadius: '3px',
+                            resize: 'vertical'
+                        },
+                        onClick: (e) => {
+                            e.target.select();
+                            document.execCommand('copy');
+                        }
+                    }),
+                    el('p', {
+                        style: {
+                            marginBottom: '0',
+                            fontSize: '12px',
+                            color: '#666',
+                            fontStyle: 'italic'
+                        }
+                    }, __('Click to select and copy', 'ekwa-video-block'))
+                )
             )
         );
 
