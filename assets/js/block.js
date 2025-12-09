@@ -688,6 +688,31 @@ registerBlockType('ekwa/video-block', {
                             let shortcode = '[ekwa_video';
                             shortcode += ' video_url="' + videoUrl + '"';
 
+                            // Include video title if provided
+                            if (videoTitle) {
+                                shortcode += ' video_title="' + videoTitle.replace(/"/g, '&quot;') + '"';
+                            }
+
+                            // Include video description if provided
+                            if (videoDescription) {
+                                shortcode += ' video_description="' + videoDescription.replace(/"/g, '&quot;') + '"';
+                            }
+
+                            // Include video duration if provided
+                            if (videoDuration) {
+                                shortcode += ' video_duration="' + videoDuration + '"';
+                            }
+
+                            // Include upload date if provided
+                            if (uploadDate) {
+                                shortcode += ' upload_date="' + uploadDate + '"';
+                            }
+
+                            // Include thumbnail URL if provided (and no custom thumbnail)
+                            if (thumbnailUrl && (!customThumbnail || !customThumbnail.url)) {
+                                shortcode += ' thumbnail_url="' + thumbnailUrl + '"';
+                            }
+
                             if (showTitle !== true) {
                                 shortcode += ' show_title="false"';
                             }
@@ -702,9 +727,13 @@ registerBlockType('ekwa/video-block', {
                             }
                             if (showTranscript === true && transcript) {
                                 shortcode += ' show_transcript="true"';
+                                shortcode += ' transcript="' + transcript.replace(/"/g, '&quot;').replace(/\n/g, '\\n') + '"';
                             }
                             if (customThumbnail && customThumbnail.url) {
                                 shortcode += ' custom_thumbnail="' + customThumbnail.url + '"';
+                                if (customThumbnail.alt) {
+                                    shortcode += ' custom_thumbnail_alt="' + customThumbnail.alt.replace(/"/g, '&quot;') + '"';
+                                }
                             }
 
                             shortcode += ']';
