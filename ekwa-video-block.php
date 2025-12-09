@@ -327,11 +327,23 @@ class EkwaVideoBlock {
             $attributes = array_merge($attributes, $video_info);
         }
 
-        // Get video metadata if not provided
-        if (empty($attributes['video_title']) || empty($attributes['thumbnail_url'])) {
+        // Get video metadata from API only for missing fields
+        // Check if we need any metadata from API
+        $needs_metadata = empty($attributes['video_title']) || 
+                         empty($attributes['video_description']) || 
+                         empty($attributes['thumbnail_url']) ||
+                         empty($attributes['video_duration']) ||
+                         empty($attributes['upload_date']);
+        
+        if ($needs_metadata) {
             $metadata = $this->get_video_metadata($attributes['video_type'], $attributes['video_id']);
             if ($metadata) {
-                $attributes = array_merge($attributes, $metadata);
+                // Only fill in the fields that are empty - don't overwrite provided values
+                foreach ($metadata as $key => $value) {
+                    if (empty($attributes[$key])) {
+                        $attributes[$key] = $value;
+                    }
+                }
             }
         }
 
