@@ -41,12 +41,25 @@ document.addEventListener('DOMContentLoaded', function() {
             this.bindTranscriptButtons();
 
             // Handle transcript toggle - comprehensive event handling for all devices
+            // Use capture phase to catch events before Owl Carousel can intercept them
+            document.addEventListener('click', (e) => {
+                const transcriptBtn = e.target.closest('.btn-transcript');
+                if (transcriptBtn) {
+                    console.log('Transcript button found via capture phase click event');
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    this.handleTranscriptToggle(e, transcriptBtn);
+                }
+            }, true); // true = capture phase
+
+            // Also keep bubbling phase as fallback
             document.addEventListener('click', (e) => {
                 console.log('Click event detected:', e.target, e.currentTarget);
                 const transcriptBtn = e.target.closest('.btn-transcript');
                 if (transcriptBtn) {
                     console.log('Transcript button found via click event');
-                    this.handleTranscriptToggle(e);
+                    this.handleTranscriptToggle(e, transcriptBtn);
                 }
             });
 
@@ -87,26 +100,8 @@ document.addEventListener('DOMContentLoaded', function() {
         bindTranscriptButtons() {
             console.log('Binding transcript buttons directly');
 
-            // Bind existing transcript buttons
-            document.querySelectorAll('.btn-transcript').forEach(button => {
-                console.log('Found transcript button:', button);
-
-                // Remove existing listeners to prevent duplicates
-                button.removeEventListener('click', this.directTranscriptHandler);
-                button.removeEventListener('touchend', this.directTranscriptHandler);
-
-                // Create bound handler
-                this.directTranscriptHandler = (e) => {
-                    console.log('Direct transcript handler fired:', e.type);
-                    e.preventDefault();
-                    e.stopPropagation();
-                    this.handleTranscriptToggle(e, button);
-                };
-
-                // Add listeners
-                button.addEventListener('click', this.directTranscriptHandler);
-                button.addEventListener('touchend', this.directTranscriptHandler);
-            });
+            // Bind existing transcript buttons (including those in Owl Carousel)
+            this.rebindAllTranscriptButtons();
 
             // Set up mutation observer for dynamically added buttons
             const observer = new MutationObserver((mutations) => {
@@ -126,6 +121,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                     this.bindSingleTranscriptButton(button);
                                 });
                             }
+                            
+                            // Check if Owl Carousel was initialized (clones added)
+                            if (node.classList && (node.classList.contains('owl-item') || node.classList.contains('owl-stage'))) {
+                                console.log('Owl Carousel content detected, rebinding transcript buttons');
+                                setTimeout(() => this.rebindAllTranscriptButtons(), 100);
+                            }
                         }
                     });
                 });
@@ -135,10 +136,51 @@ document.addEventListener('DOMContentLoaded', function() {
                 childList: true,
                 subtree: true
             });
+
+            // Listen for Owl Carousel events
+            document.addEventListener('initialized.owl.carousel', () => {
+                console.log('Owl Carousel initialized event detected');
+                setTimeout(() => this.rebindAllTranscriptButtons(), 100);
+            });
+
+            // Also use jQuery event if available (Owl Carousel uses jQuery)
+            if (typeof jQuery !== 'undefined') {
+                jQuery(document).on('initialized.owl.carousel refreshed.owl.carousel', () => {
+                    console.log('Owl Carousel jQuery event detected');
+                    setTimeout(() => this.rebindAllTranscriptButtons(), 100);
+                });
+            }
+        }
+
+        /**
+         * Rebind all transcript buttons on the page
+         * This is useful after Owl Carousel clones slides
+         */
+        rebindAllTranscriptButtons() {
+            console.log('Rebinding all transcript buttons');
+            
+            document.querySelectorAll('.btn-transcript').forEach(button => {
+                // Skip if already bound (check for our marker)
+                if (button.dataset.ekwaTranscriptBound === 'true') {
+                    return;
+                }
+                
+                console.log('Found transcript button:', button);
+                this.bindSingleTranscriptButton(button);
+                
+                // Mark as bound to prevent duplicate bindings
+                button.dataset.ekwaTranscriptBound = 'true';
+            });
         }
 
         bindSingleTranscriptButton(button) {
             console.log('Binding single transcript button:', button);
+            
+            // Skip if already bound
+            if (button.dataset.ekwaTranscriptBound === 'true') {
+                console.log('Button already bound, skipping');
+                return;
+            }
 
             // Create bound handler for this specific button
             const handler = (e) => {
@@ -552,23 +594,42 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Get target ID from data-target attribute
-            let targetId = button.getAttribute('data-target');
-
-            // Fallback: if no data-target, try to find transcript in same container
-            if (!targetId) {
-                const videoWrapper = button.closest('.ekwa-video-wrapper, .ekv-wrapper');
-                const transcript = videoWrapper ? videoWrapper.querySelector('.transcript-wrapper-del, .transcript') : null;
-                if (transcript) {
-                    targetId = '#' + transcript.id;
+            // Find transcript element - prioritize finding within same container (for Owl Carousel compatibility)
+            let transcript = null;
+            
+            // First, try to find transcript within the same video wrapper (handles Owl Carousel clones)
+            const videoWrapper = button.closest('.ekwa-video-wrapper, .ekv-wrapper');
+            if (videoWrapper) {
+                transcript = videoWrapper.querySelector('.transcript-wrapper-del, .transcript');
+                console.log('Found transcript in same wrapper:', transcript);
+            }
+            
+            // Fallback: if no transcript in wrapper, try using data-target attribute
+            if (!transcript) {
+                let targetId = button.getAttribute('data-target');
+                if (targetId) {
+                    // For Owl Carousel clones, the ID might be duplicated
+                    // Try to find the transcript within the closest carousel item first
+                    const carouselItem = button.closest('.owl-item, .carousel-item, .swiper-slide');
+                    if (carouselItem) {
+                        // Look for transcript with matching ID pattern within the carousel item
+                        const transcriptIdWithoutHash = targetId.replace('#', '');
+                        transcript = carouselItem.querySelector('[id^="transcript-"], .transcript-wrapper-del, .transcript');
+                        console.log('Found transcript in carousel item:', transcript);
+                    }
+                    
+                    // If still not found, use the global ID selector
+                    if (!transcript) {
+                        transcript = document.querySelector(targetId);
+                        console.log('Found transcript by global ID:', transcript);
+                    }
                 }
             }
 
-            console.log('Target ID:', targetId);
-            const transcript = targetId ? document.querySelector(targetId) : null;
+            console.log('Target transcript:', transcript);
 
             if (!transcript) {
-                console.error('Transcript element not found for target:', targetId);
+                console.error('Transcript element not found');
                 return;
             }
 
@@ -748,8 +809,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize the video player
     const ekwaVideoPlayer = new EkwaVideoPlayer();
 
-    // Expose to global scope for debugging
+    // Expose to global scope for debugging and external use
     window.EkwaVideoPlayer = EkwaVideoPlayer;
+    
+    // Expose rebind function for use after carousel initialization
+    window.ekwaRebindTranscriptButtons = function() {
+        console.log('Manual rebind of transcript buttons triggered');
+        ekwaVideoPlayer.rebindAllTranscriptButtons();
+    };
 
     // Handle lazy loading if intersection observer is available
     if ('IntersectionObserver' in window) {
