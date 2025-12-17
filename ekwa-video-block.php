@@ -507,10 +507,10 @@ class EkwaVideoBlock {
 
             <?php if ($attributes['open_in_lightbox'] !== 'true' && $attributes['show_transcript'] === 'true' && !empty($attributes['transcript'])): ?>
                 <div class="video_transcript_btn">
-                    <a data-target="#transcript-<?php echo esc_attr($attributes['video_id']); ?>" class="btn-standard btn-vdo-trans btn-transcript ekv-button" href="javascript:void(0);">
+                    <button type="button" data-target="#transcript-<?php echo esc_attr($attributes['video_id']); ?>" class="btn-standard btn-vdo-trans btn-transcript ekv-button">
                         Video Transcript
                         <span class="trans-icon"></span>
-                    </a>
+                    </button>
                 </div>
 
                 <div id="transcript-<?php echo esc_attr($attributes['video_id']); ?>" class="transcript-wrapper-del transcript" style="display: none;">
@@ -524,10 +524,10 @@ class EkwaVideoBlock {
 
             <?php if ($attributes['open_in_lightbox'] === 'true' && $attributes['show_transcript'] === 'true' && !empty($attributes['transcript'])): ?>
                 <div class="video_transcript_btn">
-                    <a data-target="#transcript-<?php echo esc_attr($attributes['video_id']); ?>" class="btn-standard btn-vdo-trans btn-transcript ekv-button" href="javascript:void(0);">
+                    <button type="button" data-target="#transcript-<?php echo esc_attr($attributes['video_id']); ?>" class="btn-standard btn-vdo-trans btn-transcript ekv-button">
                         Video Transcript
                         <span class="trans-icon"></span>
-                    </a>
+                    </button>
                 </div>
 
                 <div id="transcript-<?php echo esc_attr($attributes['video_id']); ?>" class="transcript-wrapper-del transcript" style="display: none;">
