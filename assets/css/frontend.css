@@ -541,31 +541,6 @@ a.ekwa-video-lightbox-trigger .ekwa-video-duration {
 }
 
 /* Dark mode support */
-@media (prefers-color-scheme: dark) {
-    .ekwa-video-wrapper {
-        background: #1e1e1e;
-        color: #ffffff;
-    }
-
-    .ekwa-video-title {
-        color: #ffffff;
-    }
-
-    .ekwa-video-description {
-        background: #2d2d2d;
-        border-top-color: #444;
-    }
-
-    .ekwa-video-description p {
-        color: #cccccc;
-    }
-
-    .ekwa-video-placeholder {
-        background: #2d2d2d;
-        border-color: #444;
-        color: #cccccc;
-    }
-}
 
 /* Animation for smooth transitions */
 .ekwa-video-wrapper * {
