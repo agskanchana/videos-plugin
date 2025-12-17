@@ -45,7 +45,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.addEventListener('click', (e) => {
                 const transcriptBtn = e.target.closest('.btn-transcript');
                 if (transcriptBtn) {
-                    console.log('Transcript button found via capture phase click event');
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
@@ -55,10 +54,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Also keep bubbling phase as fallback
             document.addEventListener('click', (e) => {
-                console.log('Click event detected:', e.target, e.currentTarget);
                 const transcriptBtn = e.target.closest('.btn-transcript');
                 if (transcriptBtn) {
-                    console.log('Transcript button found via click event');
                     this.handleTranscriptToggle(e, transcriptBtn);
                 }
             });
@@ -68,27 +65,22 @@ document.addEventListener('DOMContentLoaded', function() {
             let touchTarget = null;
 
             document.addEventListener('touchstart', (e) => {
-                console.log('Touch start detected:', e.target);
                 const transcriptBtn = e.target.closest('.btn-transcript');
                 if (transcriptBtn) {
                     touchStartTime = Date.now();
                     touchTarget = transcriptBtn;
-                    console.log('Touch start on transcript button');
                 }
             }, { passive: false });
 
             document.addEventListener('touchend', (e) => {
-                console.log('Touch end detected:', e.target);
                 const transcriptBtn = e.target.closest('.btn-transcript');
                 if (transcriptBtn || touchTarget) {
                     const touchDuration = Date.now() - touchStartTime;
-                    console.log('Touch duration:', touchDuration);
 
                     // Only handle if it's a tap (not a long press or scroll)
                     if (touchDuration < 500) {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.log('Processing touch as transcript toggle');
                         this.handleTranscriptToggle(e, transcriptBtn || touchTarget);
                     }
                 }
@@ -98,7 +90,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         bindTranscriptButtons() {
-            console.log('Binding transcript buttons directly');
 
             // Bind existing transcript buttons (including those in Owl Carousel)
             this.rebindAllTranscriptButtons();
@@ -110,21 +101,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (node.nodeType === 1) {
                             // Check if the added node is a transcript button
                             if (node.classList && node.classList.contains('btn-transcript')) {
-                                console.log('New transcript button detected:', node);
                                 this.bindSingleTranscriptButton(node);
                             }
                             // Check if the added node contains transcript buttons
                             const buttons = node.querySelectorAll && node.querySelectorAll('.btn-transcript');
                             if (buttons && buttons.length > 0) {
                                 buttons.forEach(button => {
-                                    console.log('New transcript button in added content:', button);
                                     this.bindSingleTranscriptButton(button);
                                 });
                             }
                             
                             // Check if Owl Carousel was initialized (clones added)
                             if (node.classList && (node.classList.contains('owl-item') || node.classList.contains('owl-stage'))) {
-                                console.log('Owl Carousel content detected, rebinding transcript buttons');
                                 setTimeout(() => this.rebindAllTranscriptButtons(), 100);
                             }
                         }
@@ -139,14 +127,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Listen for Owl Carousel events
             document.addEventListener('initialized.owl.carousel', () => {
-                console.log('Owl Carousel initialized event detected');
                 setTimeout(() => this.rebindAllTranscriptButtons(), 100);
             });
 
             // Also use jQuery event if available (Owl Carousel uses jQuery)
             if (typeof jQuery !== 'undefined') {
                 jQuery(document).on('initialized.owl.carousel refreshed.owl.carousel', () => {
-                    console.log('Owl Carousel jQuery event detected');
                     setTimeout(() => this.rebindAllTranscriptButtons(), 100);
                 });
             }
@@ -157,7 +143,6 @@ document.addEventListener('DOMContentLoaded', function() {
          * This is useful after Owl Carousel clones slides
          */
         rebindAllTranscriptButtons() {
-            console.log('Rebinding all transcript buttons');
             
             document.querySelectorAll('.btn-transcript').forEach(button => {
                 // Skip if already bound (check for our marker)
@@ -165,7 +150,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 
-                console.log('Found transcript button:', button);
                 this.bindSingleTranscriptButton(button);
                 
                 // Mark as bound to prevent duplicate bindings
@@ -174,17 +158,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         bindSingleTranscriptButton(button) {
-            console.log('Binding single transcript button:', button);
             
             // Skip if already bound
             if (button.dataset.ekwaTranscriptBound === 'true') {
-                console.log('Button already bound, skipping');
                 return;
             }
 
             // Create bound handler for this specific button
             const handler = (e) => {
-                console.log('Single button handler fired:', e.type, button);
                 e.preventDefault();
                 e.stopPropagation();
                 this.handleTranscriptToggle(e, button);
@@ -194,7 +175,6 @@ document.addEventListener('DOMContentLoaded', function() {
             button.addEventListener('click', handler);
             button.addEventListener('touchend', handler, { passive: false });
             button.addEventListener('touchstart', (e) => {
-                console.log('Touch start on button:', button);
                 button.classList.add('touching');
             });
             button.addEventListener('touchend', (e) => {
@@ -212,7 +192,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     window.ekwaYTLoading = true;
 
                     window.onYouTubeIframeAPIReady = () => {
-                        console.log('YouTube API loaded');
+                        // console.log('YouTube API loaded');
                         resolve(window.YT);
                     };
 
@@ -289,7 +269,7 @@ document.addEventListener('DOMContentLoaded', function() {
         resumeYouTubePlayer(playerState, thumbnail, playerElement) {
             const { player: ytPlayer, container, currentTime } = playerState;
 
-            console.log('Resuming YouTube player from:', currentTime);
+            // console.log('Resuming YouTube player from:', currentTime);
 
             // Hide thumbnail overlay to reveal the active video underneath
             thumbnail.style.opacity = '0';
@@ -324,7 +304,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Get stored time if video was paused before
             const playerState = this.players.get(videoId) || { currentTime: 0 };
 
-            console.log('Creating new YouTube player for:', videoId);
+            // console.log('Creating new YouTube player for:', videoId);
 
             // Calculate proper height based on wrapper width and 16:9 aspect ratio
             const wrapper = player.closest('.ekwa-video-wrapper, .ekv-wrapper');
@@ -377,7 +357,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         },
                         events: {
                             onReady: (readyEvent) => {
-                                console.log('YouTube player ready');
+                                // console.log('YouTube player ready');
                                 // Store player reference
                                 this.players.set(videoId, {
                                     ...playerState,
@@ -419,11 +399,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
             switch (event.data) {
                 case YT.PlayerState.PLAYING:
-                    console.log('Video playing');
                     break;
 
                 case YT.PlayerState.PAUSED:
-                    console.log('Video paused');
                     // Store current time
                     const currentTime = player.getCurrentTime();
                     this.players.set(videoId, {
@@ -436,7 +414,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;
 
                 case YT.PlayerState.ENDED:
-                    console.log('Video ended');
                     // Reset time and show thumbnail
                     this.players.set(videoId, {
                         ...playerState,
@@ -563,10 +540,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         handleTranscriptToggle(e, forcedButton = null) {
-            console.log('=== TRANSCRIPT TOGGLE START ===');
-            console.log('Event type:', e.type);
-            console.log('Event target:', e.target);
-            console.log('Forced button:', forcedButton);
 
             if (e && e.preventDefault) {
                 e.preventDefault();
@@ -587,10 +560,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 button = document.querySelector('.btn-transcript');
             }
 
-            console.log('Final button found:', button);
 
             if (!button) {
-                console.error('No transcript button found anywhere');
                 return;
             }
 
@@ -601,7 +572,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const videoWrapper = button.closest('.ekwa-video-wrapper, .ekv-wrapper');
             if (videoWrapper) {
                 transcript = videoWrapper.querySelector('.transcript-wrapper-del, .transcript');
-                console.log('Found transcript in same wrapper:', transcript);
             }
             
             // Fallback: if no transcript in wrapper, try using data-target attribute
@@ -615,25 +585,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Look for transcript with matching ID pattern within the carousel item
                         const transcriptIdWithoutHash = targetId.replace('#', '');
                         transcript = carouselItem.querySelector('[id^="transcript-"], .transcript-wrapper-del, .transcript');
-                        console.log('Found transcript in carousel item:', transcript);
                     }
                     
                     // If still not found, use the global ID selector
                     if (!transcript) {
                         transcript = document.querySelector(targetId);
-                        console.log('Found transcript by global ID:', transcript);
                     }
                 }
             }
 
-            console.log('Target transcript:', transcript);
 
             if (!transcript) {
-                console.error('Transcript element not found');
                 return;
             }
 
-            console.log('Transcript element found:', transcript);
 
             // Check current state
             const isOpen = transcript.classList.contains('open') || transcript.style.display === 'block';
@@ -650,7 +615,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 button.setAttribute('aria-expanded', 'false');
 
-                console.log('Transcript closed');
             } else {
                 // Open transcript
                 transcript.classList.add('open');
@@ -663,7 +627,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 button.setAttribute('aria-expanded', 'true');
 
-                console.log('Transcript opened');
             }
         }
 
@@ -683,7 +646,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         slideUp(element, duration) {
-            console.log('Sliding up transcript');
 
             // Store original styles
             const originalHeight = element.scrollHeight;
@@ -715,12 +677,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 element.style.paddingTop = '';
                 element.style.paddingBottom = '';
                 element.style.opacity = '';
-                console.log('Slide up complete');
             }, duration);
         }
 
         slideDown(element, duration) {
-            console.log('Sliding down transcript');
 
             // Show element to measure height
             const originalDisplay = element.style.display;
@@ -756,7 +716,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 element.style.overflow = '';
                 element.style.height = '';
                 element.style.opacity = '';
-                console.log('Slide down complete');
             }, duration);
         }
 
@@ -814,7 +773,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Expose rebind function for use after carousel initialization
     window.ekwaRebindTranscriptButtons = function() {
-        console.log('Manual rebind of transcript buttons triggered');
         ekwaVideoPlayer.rebindAllTranscriptButtons();
     };
 
@@ -870,14 +828,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Force a style recalculation
                 container.offsetHeight;
 
-                console.log('Responsive update - Wrapper Width:', wrapperWidth, 'Calculated Height:', calculatedHeight, 'Applied Height:', container.style.height);
 
                 // If there's an iframe inside, make sure it fills the container
                 const iframe = container.querySelector('iframe, div[id^="player-"]');
                 if (iframe) {
                     iframe.style.width = '100%';
                     iframe.style.height = '100%';
-                    console.log('Updated iframe dimensions');
                 }
             }
         });
@@ -904,7 +860,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 thumbnail.style.width = '100%';
                 thumbnail.style.zIndex = '10';
 
-                console.log('Repositioned thumbnail overlay - Height:', containerRect.height);
             }
         });
     }
@@ -914,7 +869,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.addEventListener('resize', function() {
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(function() {
-            console.log('Window resized, updating videos...');
+            // console.log('Window resized, updating videos...');
             handleResponsiveVideos();
             // Fix thumbnail overlays after resize
             repositionThumbnailOverlays();
@@ -929,7 +884,7 @@ document.addEventListener('DOMContentLoaded', function() {
         handleResponsiveVideos: handleResponsiveVideos,
         repositionThumbnailOverlays: repositionThumbnailOverlays,
         forceUpdate: function() {
-            console.log('=== FORCING VIDEO UPDATE ===');
+            // console.log('=== FORCING VIDEO UPDATE ===');
             handleResponsiveVideos();
             repositionThumbnailOverlays();
         }
@@ -992,7 +947,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 moreLength: 0
             });
 
-            console.log('GLightbox initialized successfully');
+            // console.log('GLightbox initialized successfully');
         }
     }    /**
      * Setup lazy loading triggers
@@ -1021,13 +976,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 event.preventDefault();
                 event.stopPropagation();
 
-                console.log('Loading GLightbox...');
+                // console.log('Loading GLightbox...');
 
                 // Show loading indicator
                 lightboxTrigger.style.opacity = '0.7';
 
                 loadGLightbox().then(function() {
-                    console.log('GLightbox loaded, opening lightbox...');
+                    // console.log('GLightbox loaded, opening lightbox...');
                     // Restore original content
                     lightboxTrigger.style.opacity = '1';
 
@@ -1040,16 +995,14 @@ document.addEventListener('DOMContentLoaded', function() {
                             // Find the index of this element in all glightbox elements
                             const allLightboxElements = document.querySelectorAll('.glightbox');
                             const elementIndex = Array.from(allLightboxElements).indexOf(lightboxTrigger);
-                            console.log('Opening lightbox at index:', elementIndex);
+                            // console.log('Opening lightbox at index:', elementIndex);
                             glightboxInstance.openAt(elementIndex);
                         } else {
-                            console.error('GLightbox instance not available');
                             // Fallback: try normal click
                             lightboxTrigger.click();
                         }
                     }, 200);
                 }).catch(function(error) {
-                    console.error('Failed to load GLightbox:', error);
                     lightboxTrigger.style.opacity = '1';
                 });
             }
