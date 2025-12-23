@@ -399,29 +399,78 @@ document.addEventListener('DOMContentLoaded', function() {
 
             switch (event.data) {
                 case YT.PlayerState.PLAYING:
+                    // Cancel any pending pause timeout (user was seeking, not pausing)
+                    if (playerState.pauseTimeout) {
+                        clearTimeout(playerState.pauseTimeout);
+                        this.players.set(videoId, {
+                            ...playerState,
+                            pauseTimeout: null
+                        });
+                    }
+                    // Hide thumbnail if it was shown during seeking
+                    this.hideThumbnailOverlay(thumbnail, playerElement);
                     break;
 
                 case YT.PlayerState.PAUSED:
                     // Store current time
                     const currentTime = player.getCurrentTime();
+                    
+                    // Use a small delay before showing thumbnail to handle seeking
+                    // When seeking on progress bar, PAUSED fires briefly then PLAYING resumes
+                    const pauseTimeout = setTimeout(() => {
+                        // Double-check the video is still paused before showing thumbnail
+                        const currentState = this.players.get(videoId);
+                        if (currentState && currentState.pauseTimeout) {
+                            this.showThumbnailBack(container, thumbnail, playerElement);
+                            this.players.set(videoId, {
+                                ...currentState,
+                                pauseTimeout: null
+                            });
+                        }
+                    }, 300); // Wait 300ms to confirm it's a real pause, not seeking
+                    
                     this.players.set(videoId, {
                         ...playerState,
-                        currentTime: currentTime
+                        currentTime: currentTime,
+                        pauseTimeout: pauseTimeout
                     });
-
-                    // Show thumbnail back
-                    this.showThumbnailBack(container, thumbnail, playerElement);
                     break;
 
                 case YT.PlayerState.ENDED:
+                    // Cancel any pending pause timeout
+                    if (playerState.pauseTimeout) {
+                        clearTimeout(playerState.pauseTimeout);
+                    }
                     // Reset time and show thumbnail
                     this.players.set(videoId, {
                         ...playerState,
-                        currentTime: 0
+                        currentTime: 0,
+                        pauseTimeout: null
                     });
 
                     this.showThumbnailBack(container, thumbnail, playerElement);
                     break;
+            }
+        }
+
+        hideThumbnailOverlay(thumbnail, playerElement) {
+            // Only hide if the thumbnail is currently overlaying
+            if (thumbnail.dataset.overlayActive === 'true') {
+                thumbnail.style.opacity = '0';
+                thumbnail.style.transition = 'opacity 200ms';
+                
+                setTimeout(() => {
+                    thumbnail.style.display = 'none';
+                    thumbnail.style.position = '';
+                    thumbnail.style.top = '';
+                    thumbnail.style.left = '';
+                    thumbnail.style.width = '';
+                    thumbnail.style.height = '';
+                    thumbnail.style.zIndex = '';
+                    thumbnail.dataset.overlayActive = 'false';
+                }, 200);
+                
+                playerElement.classList.add('ekwa-video-loaded');
             }
         }
 
