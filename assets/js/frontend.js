@@ -526,6 +526,7 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 const ytPlayer = new YT.Player(playerId, {
                     videoId: videoId,
+                    host: 'https://www.youtube-nocookie.com', // Use privacy-enhanced domain
                     playerVars: {
                         autoplay: 1,
                         playsinline: 1, // Critical for iOS
@@ -590,7 +591,8 @@ document.addEventListener('DOMContentLoaded', function() {
         createYouTubeIframeFallback(player, container, thumbnail, videoId, playerState) {
             // Build iframe URL with all necessary parameters
             const startTime = Math.floor(playerState.currentTime || 0);
-            let iframeSrc = `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1&cc_load_policy=0&iv_load_policy=3&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
+            // Use youtube-nocookie.com to prevent blocking in private windows
+            let iframeSrc = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1&cc_load_policy=0&iv_load_policy=3&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
             
             if (startTime > 0) {
                 iframeSrc += `&start=${startTime}`;
@@ -771,7 +773,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Build iframe source with autoplay and no related content
             let iframeSrc = embedUrl;
             const separator = embedUrl.includes('?') ? '&' : '?';
-            iframeSrc += separator + 'autoplay=1&title=0&byline=0&portrait=0&loop=0&playsinline=1';
+            // Add dnt=1 (Do Not Track) to prevent cookie blocking issues in private windows
+            iframeSrc += separator + 'autoplay=1&title=0&byline=0&portrait=0&loop=0&playsinline=1&dnt=1';
 
             // Create iframe
             const iframe = document.createElement('iframe');
