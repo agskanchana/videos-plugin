@@ -1045,12 +1045,19 @@
 
         /**
          * Get reliable container height to prevent layout shift
-         * Uses multiple fallbacks including HTML attributes for first visit
+         * Uses data-aspect-ratio from PHP as the most reliable source
          */
         getVideoContainerHeight(player, thumbnail) {
-            const img = thumbnail.querySelector('img');
+            // Get container width first - this is always available
+            const containerWidth = thumbnail.offsetWidth || player.offsetWidth || player.getBoundingClientRect().width;
             
-            // Try 1: Use stored computed height (set by precomputeHeights)
+            // Try 1: Use data-aspect-ratio from PHP (most reliable - always available)
+            const aspectRatio = parseFloat(thumbnail.dataset.aspectRatio);
+            if (aspectRatio > 0 && containerWidth > 0) {
+                return Math.round(containerWidth * aspectRatio);
+            }
+
+            // Try 2: Use stored computed height (set by precomputeHeights)
             if (thumbnail.dataset.computedHeight) {
                 const storedHeight = parseFloat(thumbnail.dataset.computedHeight);
                 if (storedHeight > 0) {
@@ -1058,42 +1065,24 @@
                 }
             }
 
-            // Try 2: Get from the image element's rendered height
+            // Try 3: Get from the image element's rendered height
+            const img = thumbnail.querySelector('img');
             if (img && img.offsetHeight > 0) {
                 return img.offsetHeight;
             }
 
-            // Try 3: Get from thumbnail's bounding rect
-            const thumbnailRect = thumbnail.getBoundingClientRect();
-            if (thumbnailRect.height > 0) {
-                return thumbnailRect.height;
-            }
-
             // Try 4: Calculate from image's width/height HTML attributes
-            // This works on first visit before image fully renders
             if (img) {
                 const attrWidth = img.getAttribute('width');
                 const attrHeight = img.getAttribute('height');
-                if (attrWidth && attrHeight) {
-                    const aspectRatio = parseFloat(attrHeight) / parseFloat(attrWidth);
-                    const containerWidth = thumbnail.offsetWidth || player.offsetWidth || thumbnailRect.width;
-                    if (containerWidth > 0) {
-                        return containerWidth * aspectRatio;
-                    }
+                if (attrWidth && attrHeight && containerWidth > 0) {
+                    const imgAspectRatio = parseFloat(attrHeight) / parseFloat(attrWidth);
+                    return Math.round(containerWidth * imgAspectRatio);
                 }
             }
 
-            // Try 5: Calculate from image's natural dimensions if available
-            if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
-                const aspectRatio = img.naturalHeight / img.naturalWidth;
-                const width = thumbnail.offsetWidth || player.offsetWidth;
-                return width * aspectRatio;
-            }
-
-            // Try 6: Calculate from player/wrapper width using 16:9 aspect ratio
-            const wrapper = player.closest('.ekwa-video-wrapper, .ekv-wrapper');
-            const width = wrapper ? wrapper.offsetWidth : player.offsetWidth;
-            return width * (9 / 16);
+            // Try 5: Fallback to 16:9 aspect ratio
+            return Math.round(containerWidth * (9 / 16));
         }
 
         /**

@@ -66,11 +66,10 @@
 .ekwa-video-player .ekwa-video-thumbnail {
     position: relative;
     z-index: 2; /* Above video when overlaying */
-    /* Ensure thumbnail maintains consistent sizing */
-    object-fit: cover;
     transition: opacity 300ms; /* Only animate opacity, not size */
     /* Contain layout to prevent shifts */
     contain: layout style;
+    overflow: hidden;
 }
 
 /* Ensure image fills container and maintains aspect ratio */
@@ -78,8 +77,6 @@
     display: block;
     width: 100%;
     height: auto;
-    /* Prevent layout shift - use aspect-ratio from width/height attributes */
-    aspect-ratio: attr(width) / attr(height);
 }
 
 /* Prevent any flickering during player initialization */

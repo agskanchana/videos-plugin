@@ -3,7 +3,7 @@
  * Plugin Name: Ekwa Video Block
  * Plugin URI: https://www.ekwa.com
  * Description: A Gutenberg block for embedding YouTube and Vimeo videos with lazy loading and custom thumbnails
- * Version: 1.3.4
+ * Version: 1.3.5
  * Author: Ekwa Team
  * Author URI: https://www.ekwa.com
  * Text Domain: ekwa-video-block
@@ -32,7 +32,7 @@ $myUpdateChecker = PucFactory::buildUpdateChecker(
 
     
 // Define plugin constants
-define('EKWA_VIDEO_BLOCK_VERSION', '1.3.4');
+define('EKWA_VIDEO_BLOCK_VERSION', '1.3.5');
 define('EKWA_VIDEO_BLOCK_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('EKWA_VIDEO_BLOCK_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
@@ -458,8 +458,10 @@ class EkwaVideoBlock {
                             <?php
                             // Get thumbnail dimensions for better performance (prevent layout shift)
                             $thumb_dimensions = $this->get_thumbnail_dimensions($thumbnail_url, $attributes['video_type'], $attributes['custom_thumbnail']);
+                            // Calculate aspect ratio for JS height calculation
+                            $aspect_ratio = $thumb_dimensions['height'] / $thumb_dimensions['width'];
                             ?>
-                            <div class="ekwa-video-thumbnail" data-embed-url="<?php echo esc_attr($attributes['embed_url']); ?>">
+                            <div class="ekwa-video-thumbnail" data-embed-url="<?php echo esc_attr($attributes['embed_url']); ?>" data-aspect-ratio="<?php echo esc_attr($aspect_ratio); ?>">
                                 <img decoding="async"
                                      class="image-responsive ls-is-cached lazyloaded ekwa-video-thumb-img"
                                      src="<?php echo esc_url($thumbnail_url); ?>"
