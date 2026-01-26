@@ -474,9 +474,8 @@
             // Get stored time if video was paused before
             const playerState = this.players.get(videoId) || { currentTime: 0 };
 
-            // Use thumbnail's actual height to prevent layout shift
-            const thumbnailRect = thumbnail.getBoundingClientRect();
-            const containerHeight = thumbnailRect.height;
+            // Get container height - use multiple fallbacks to prevent layout shift
+            const containerHeight = this.getVideoContainerHeight(player, thumbnail);
 
             // Set container to match thumbnail dimensions exactly
             Object.assign(container.style, {
@@ -793,9 +792,8 @@
             iframe.height = '100%';
             iframe.className = 'ekwa-video-iframe';
 
-            // Use thumbnail's actual height to prevent layout shift
-            const thumbnailRect = thumbnail.getBoundingClientRect();
-            const containerHeight = thumbnailRect.height;
+            // Get container height - use multiple fallbacks to prevent layout shift
+            const containerHeight = this.getVideoContainerHeight(player, thumbnail);
 
             // Set container to match thumbnail dimensions exactly
             Object.assign(container.style, {
@@ -1043,6 +1041,36 @@
                 element.style.height = '';
                 element.style.opacity = '';
             }, duration);
+        }
+
+        /**
+         * Get reliable container height to prevent layout shift
+         * Uses multiple fallbacks: image dimensions, thumbnail rect, or calculated from width
+         */
+        getVideoContainerHeight(player, thumbnail) {
+            // Try 1: Get from the image element's rendered height
+            const img = thumbnail.querySelector('img');
+            if (img && img.offsetHeight > 0) {
+                return img.offsetHeight;
+            }
+
+            // Try 2: Get from thumbnail's bounding rect
+            const thumbnailRect = thumbnail.getBoundingClientRect();
+            if (thumbnailRect.height > 0) {
+                return thumbnailRect.height;
+            }
+
+            // Try 3: Calculate from image's natural dimensions if available
+            if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
+                const aspectRatio = img.naturalHeight / img.naturalWidth;
+                const width = thumbnail.offsetWidth || player.offsetWidth;
+                return width * aspectRatio;
+            }
+
+            // Try 4: Calculate from player/wrapper width using 16:9 aspect ratio
+            const wrapper = player.closest('.ekwa-video-wrapper, .ekv-wrapper');
+            const width = wrapper ? wrapper.offsetWidth : player.offsetWidth;
+            return width * (9 / 16);
         }
 
         // Utility method to get video ID from URL
