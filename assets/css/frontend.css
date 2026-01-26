@@ -85,10 +85,21 @@
     cursor: pointer;
     overflow: hidden;
     transition: transform 0.3s ease;
+    /* Improve touch responsiveness on iOS */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .ekwa-video-thumbnail:hover {
     transform: scale(1.02);
+}
+
+/* Touch feedback for mobile */
+.ekwa-video-thumbnail.ekwa-touching {
+    transform: scale(0.98);
+    opacity: 0.9;
 }
 
 .ekwa-video-thumb-img,

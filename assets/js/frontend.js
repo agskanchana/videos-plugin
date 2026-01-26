@@ -3,10 +3,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     /**
      * Ekwa Video Block Frontend JavaScript - Vanilla JS
+     * With enhanced iOS/Safari support
      */
     class EkwaVideoPlayer {
         constructor() {
             this.players = new Map(); // Store player instances and states
+            this.youtubeAPIReady = false;
+            this.youtubeAPIPromise = null;
+            this.pendingClicks = new Map(); // Store pending click handlers for when API loads
+            this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            this.isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
             this.init();
         }
 
@@ -16,26 +23,36 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         bindEvents() {
-            // Handle thumbnail click
+            // Handle thumbnail click - use capture phase for reliability
             document.addEventListener('click', (e) => {
-                if (e.target.closest('.ekwa-video-thumbnail')) {
+                const thumbnail = e.target.closest('.ekwa-video-thumbnail');
+                if (thumbnail) {
+                    e.preventDefault();
+                    e.stopPropagation();
                     this.handleThumbnailClick(e);
                 }
-            });
+            }, true);
 
             // Handle play button click on loaded videos
             document.addEventListener('click', (e) => {
                 if (e.target.closest('.ekwa-video-play-button')) {
+                    e.preventDefault();
+                    e.stopPropagation();
                     this.handlePlayButtonClick(e);
                 }
-            });
+            }, true);
 
             // Handle play icon click (for schema markup structure)
             document.addEventListener('click', (e) => {
                 if (e.target.closest('.playicon')) {
+                    e.preventDefault();
+                    e.stopPropagation();
                     this.handlePlayIconClick(e);
                 }
-            });
+            }, true);
+
+            // Enhanced touch event support for video thumbnails (iOS/Safari)
+            this.bindTouchEventsForThumbnails();
 
             // Direct event listeners for transcript buttons (fallback method)
             this.bindTranscriptButtons();
@@ -87,6 +104,82 @@ document.addEventListener('DOMContentLoaded', function() {
                 touchStartTime = 0;
                 touchTarget = null;
             }, { passive: false });
+        }
+
+        /**
+         * Bind touch events specifically for video thumbnails
+         * Critical for iOS/Safari compatibility
+         */
+        bindTouchEventsForThumbnails() {
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let touchStartTime = 0;
+            let touchedThumbnail = null;
+
+            // Touchstart - record initial position
+            document.addEventListener('touchstart', (e) => {
+                const thumbnail = e.target.closest('.ekwa-video-thumbnail');
+                if (thumbnail) {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                    touchStartTime = Date.now();
+                    touchedThumbnail = thumbnail;
+                    
+                    // Add visual feedback
+                    thumbnail.classList.add('ekwa-touching');
+                }
+            }, { passive: true });
+
+            // Touchend - handle as click if it was a tap
+            document.addEventListener('touchend', (e) => {
+                const thumbnail = e.target.closest('.ekwa-video-thumbnail');
+                const targetThumbnail = thumbnail || touchedThumbnail;
+                
+                if (targetThumbnail) {
+                    // Remove visual feedback
+                    targetThumbnail.classList.remove('ekwa-touching');
+                    
+                    const touchEndX = e.changedTouches[0].clientX;
+                    const touchEndY = e.changedTouches[0].clientY;
+                    const touchDuration = Date.now() - touchStartTime;
+                    const touchDistance = Math.sqrt(
+                        Math.pow(touchEndX - touchStartX, 2) + 
+                        Math.pow(touchEndY - touchStartY, 2)
+                    );
+                    
+                    // Consider it a tap if: short duration and minimal movement
+                    if (touchDuration < 500 && touchDistance < 30) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        // Create a synthetic event for the handler
+                        const syntheticEvent = {
+                            target: targetThumbnail,
+                            preventDefault: () => {},
+                            stopPropagation: () => {}
+                        };
+                        
+                        this.handleThumbnailClick(syntheticEvent);
+                    }
+                }
+                
+                // Reset
+                touchStartX = 0;
+                touchStartY = 0;
+                touchStartTime = 0;
+                touchedThumbnail = null;
+            }, { passive: false });
+
+            // Touchcancel - cleanup
+            document.addEventListener('touchcancel', () => {
+                if (touchedThumbnail) {
+                    touchedThumbnail.classList.remove('ekwa-touching');
+                }
+                touchStartX = 0;
+                touchStartY = 0;
+                touchStartTime = 0;
+                touchedThumbnail = null;
+            }, { passive: true });
         }
 
         bindTranscriptButtons() {
@@ -183,43 +276,95 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         loadYouTubeAPI() {
+            // Return existing promise if already loading
+            if (this.youtubeAPIPromise) {
+                return this.youtubeAPIPromise;
+            }
+
+            // If already loaded, resolve immediately
             if (window.YT && window.YT.Player) {
+                this.youtubeAPIReady = true;
                 return Promise.resolve(window.YT);
             }
 
-            return new Promise((resolve) => {
+            this.youtubeAPIPromise = new Promise((resolve, reject) => {
+                // Set timeout to prevent indefinite waiting
+                const timeout = setTimeout(() => {
+                    console.warn('YouTube API load timeout - using iframe fallback');
+                    this.youtubeAPIReady = false;
+                    resolve(null); // Resolve with null to use fallback
+                }, 10000);
+
                 if (!window.ekwaYTLoading) {
                     window.ekwaYTLoading = true;
 
+                    // Store existing callback if any
+                    const existingCallback = window.onYouTubeIframeAPIReady;
+
                     window.onYouTubeIframeAPIReady = () => {
-                        // console.log('YouTube API loaded');
+                        clearTimeout(timeout);
+                        this.youtubeAPIReady = true;
+                        
+                        // Call existing callback if any
+                        if (existingCallback) {
+                            existingCallback();
+                        }
+                        
                         resolve(window.YT);
                     };
 
                     const tag = document.createElement('script');
                     tag.src = 'https://www.youtube.com/iframe_api';
                     tag.async = true;
+                    tag.onerror = () => {
+                        clearTimeout(timeout);
+                        console.warn('YouTube API failed to load - using iframe fallback');
+                        this.youtubeAPIReady = false;
+                        resolve(null);
+                    };
                     document.head.appendChild(tag);
                 } else {
                     // Wait for existing load
                     const checkLoaded = setInterval(() => {
                         if (window.YT && window.YT.Player) {
                             clearInterval(checkLoaded);
+                            clearTimeout(timeout);
+                            this.youtubeAPIReady = true;
                             resolve(window.YT);
                         }
                     }, 100);
                 }
             });
+
+            return this.youtubeAPIPromise;
         }
 
         handleThumbnailClick(e) {
-            e.preventDefault();
-            const thumbnail = e.target.closest('.ekwa-video-thumbnail');
+            if (e && e.preventDefault) e.preventDefault();
+            
+            const thumbnail = e.target.closest ? e.target.closest('.ekwa-video-thumbnail') : e.target;
+            
+            if (!thumbnail) {
+                console.error('No thumbnail found');
+                return;
+            }
+
+            // Prevent double-clicks / rapid taps
+            if (thumbnail.dataset.ekwaLoading === 'true') {
+                return;
+            }
+            thumbnail.dataset.ekwaLoading = 'true';
 
             // Support both old and new structure
             let player = thumbnail.closest('.ekwa-video-player');
             if (!player) {
                 player = thumbnail.closest('.player');
+            }
+
+            if (!player) {
+                console.error('No player container found');
+                thumbnail.dataset.ekwaLoading = 'false';
+                return;
             }
 
             let container = player.querySelector('.ekwa-video-iframe-container');
@@ -246,6 +391,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (!embedUrl || !videoType || !videoId) {
                 console.error('Missing video data');
+                thumbnail.dataset.ekwaLoading = 'false';
                 return;
             }
 
@@ -256,6 +402,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (existingPlayerState && existingPlayerState.player) {
                     // Resume existing player
                     this.resumeYouTubePlayer(existingPlayerState, thumbnail, player);
+                    thumbnail.dataset.ekwaLoading = 'false';
                 } else {
                     // Create new player
                     const playerId = `player-${videoId}-${Date.now()}`;
@@ -263,13 +410,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             } else if (videoType === 'vimeo') {
                 this.loadVimeoPlayer(player, container, thumbnail, embedUrl);
+            } else {
+                thumbnail.dataset.ekwaLoading = 'false';
             }
         }
 
         resumeYouTubePlayer(playerState, thumbnail, playerElement) {
             const { player: ytPlayer, container, currentTime } = playerState;
-
-            // console.log('Resuming YouTube player from:', currentTime);
 
             // Hide thumbnail overlay to reveal the active video underneath
             thumbnail.style.opacity = '0';
@@ -300,11 +447,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 300);
         }
 
+        /**
+         * Load YouTube player with fallback for iOS/Safari
+         */
         loadYouTubePlayer(player, container, thumbnail, videoId, playerId) {
             // Get stored time if video was paused before
             const playerState = this.players.get(videoId) || { currentTime: 0 };
-
-            // console.log('Creating new YouTube player for:', videoId);
 
             // Calculate proper height based on wrapper width and 16:9 aspect ratio
             const wrapper = player.closest('.ekwa-video-wrapper, .ekv-wrapper');
@@ -321,10 +469,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 display: 'none' // Keep hidden until ready
             });
 
-            // Create iframe element
-            const iframe = document.createElement('div');
-            iframe.id = playerId;
-            iframe.style.cssText = `
+            // Hide thumbnail first, then load player
+            this.fadeOut(thumbnail, 300, () => {
+                // Show container with exact same dimensions
+                container.style.display = 'block';
+
+                // Try to load YouTube API, with fallback to iframe
+                this.loadYouTubeAPI().then((YT) => {
+                    if (YT && YT.Player) {
+                        // Use YouTube API for better control
+                        this.createYouTubeAPIPlayer(player, container, thumbnail, videoId, playerState);
+                    } else {
+                        // Fallback: Use standard iframe (more reliable on iOS/Safari)
+                        this.createYouTubeIframeFallback(player, container, thumbnail, videoId, playerState);
+                    }
+                }).catch(() => {
+                    // On error, use iframe fallback
+                    this.createYouTubeIframeFallback(player, container, thumbnail, videoId, playerState);
+                });
+            });
+        }
+
+        /**
+         * Create YouTube player using the Iframe API
+         */
+        createYouTubeAPIPlayer(player, container, thumbnail, videoId, playerState) {
+            const playerId = `player-${videoId}-${Date.now()}`;
+            
+            // Create placeholder div for YT.Player
+            const playerDiv = document.createElement('div');
+            playerDiv.id = playerId;
+            playerDiv.style.cssText = `
                 position: absolute;
                 top: 0;
                 left: 0;
@@ -333,65 +508,136 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
 
             container.innerHTML = '';
+            container.appendChild(playerDiv);
+
+            try {
+                const ytPlayer = new YT.Player(playerId, {
+                    videoId: videoId,
+                    playerVars: {
+                        autoplay: 1,
+                        playsinline: 1, // Critical for iOS
+                        rel: 0,
+                        modestbranding: 1,
+                        fs: 1,
+                        cc_load_policy: 0,
+                        iv_load_policy: 3,
+                        autohide: 0,
+                        start: Math.floor(playerState.currentTime || 0),
+                        origin: window.location.origin
+                    },
+                    events: {
+                        onReady: (readyEvent) => {
+                            // Reset loading state
+                            thumbnail.dataset.ekwaLoading = 'false';
+                            
+                            // Store player reference
+                            this.players.set(videoId, {
+                                ...playerState,
+                                player: ytPlayer,
+                                container: container,
+                                thumbnail: thumbnail,
+                                playerId: playerId,
+                                useAPI: true
+                            });
+
+                            // Add loaded class to player
+                            player.classList.add('ekwa-video-loaded');
+
+                            // Trigger custom event for GA4 tracking
+                            const customEvent = new CustomEvent('ekwaVideoLoaded', {
+                                detail: {
+                                    videoType: 'youtube',
+                                    videoId: videoId,
+                                    player: ytPlayer,
+                                    playerElement: player
+                                }
+                            });
+                            document.dispatchEvent(customEvent);
+                        },
+                        onStateChange: (stateEvent) => {
+                            this.handleYouTubeStateChange(stateEvent, videoId, player);
+                        },
+                        onError: (errorEvent) => {
+                            console.error('YouTube API player error:', errorEvent.data);
+                            // On error, try iframe fallback
+                            this.createYouTubeIframeFallback(player, container, thumbnail, videoId, playerState);
+                        }
+                    }
+                });
+            } catch (e) {
+                console.error('Error creating YouTube API player:', e);
+                // Fallback to iframe
+                this.createYouTubeIframeFallback(player, container, thumbnail, videoId, playerState);
+            }
+        }
+
+        /**
+         * Create YouTube player using standard iframe (fallback for iOS/Safari)
+         */
+        createYouTubeIframeFallback(player, container, thumbnail, videoId, playerState) {
+            // Build iframe URL with all necessary parameters
+            const startTime = Math.floor(playerState.currentTime || 0);
+            let iframeSrc = `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1&cc_load_policy=0&iv_load_policy=3`;
+            
+            if (startTime > 0) {
+                iframeSrc += `&start=${startTime}`;
+            }
+
+            // Create iframe
+            const iframe = document.createElement('iframe');
+            iframe.src = iframeSrc;
+            iframe.frameBorder = '0';
+            iframe.allowFullscreen = true;
+            // Critical: allow attribute for autoplay on iOS
+            iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+            iframe.setAttribute('allowfullscreen', '');
+            iframe.setAttribute('webkitallowfullscreen', '');
+            iframe.setAttribute('mozallowfullscreen', '');
+            iframe.width = '100%';
+            iframe.height = '100%';
+            iframe.className = 'ekwa-video-iframe';
+
+            Object.assign(iframe.style, {
+                position: 'absolute',
+                top: '0',
+                left: '0',
+                width: '100%',
+                height: '100%',
+                border: 'none'
+            });
+
+            container.innerHTML = '';
             container.appendChild(iframe);
 
-            // Hide thumbnail and show iframe
-            this.fadeOut(thumbnail, 300, () => {
-                // Show container with exact same dimensions
-                container.style.display = 'block';
+            // Reset loading state
+            thumbnail.dataset.ekwaLoading = 'false';
 
-                // Initialize YouTube player with API for better control
-                this.loadYouTubeAPI().then(() => {
-                    const ytPlayer = new YT.Player(playerId, {
-                        videoId: videoId,
-                        playerVars: {
-                            autoplay: 1,
-                            rel: 0, // Don't show related videos
-                            modestbranding: 1,
-                            fs: 1,
-                            cc_load_policy: 0,
-                            iv_load_policy: 3,
-                            autohide: 0,
-                            start: Math.floor(playerState.currentTime), // Resume from where it was paused
-                            origin: window.location.origin // Fix origin issues
-                        },
-                        events: {
-                            onReady: (readyEvent) => {
-                                // console.log('YouTube player ready');
-                                // Store player reference
-                                this.players.set(videoId, {
-                                    ...playerState,
-                                    player: ytPlayer,
-                                    container: container,
-                                    thumbnail: thumbnail,
-                                    playerId: playerId
-                                });
-
-                                // Add loaded class to player
-                                player.classList.add('ekwa-video-loaded');
-
-                                // Trigger custom event on document for GA4 tracking
-                                const customEvent = new CustomEvent('ekwaVideoLoaded', {
-                                    detail: {
-                                        videoType: 'youtube',
-                                        videoId: videoId,
-                                        player: ytPlayer,
-                                        playerElement: player // Also pass the player element
-                                    }
-                                });
-                                document.dispatchEvent(customEvent);
-                            },
-                            onStateChange: (stateEvent) => {
-                                this.handleYouTubeStateChange(stateEvent, videoId, player);
-                            },
-                            onError: (errorEvent) => {
-                                console.error('YouTube player error:', errorEvent.data);
-                            }
-                        }
-                    });
-                });
+            // Store reference (without YT.Player instance)
+            this.players.set(videoId, {
+                ...playerState,
+                player: null,
+                iframe: iframe,
+                container: container,
+                thumbnail: thumbnail,
+                useAPI: false
             });
-        }        handleYouTubeStateChange(event, videoId, playerElement) {
+
+            // Add loaded class to player
+            player.classList.add('ekwa-video-loaded');
+
+            // Trigger custom event for GA4 tracking
+            const customEvent = new CustomEvent('ekwaVideoLoaded', {
+                detail: {
+                    videoType: 'youtube',
+                    videoId: videoId,
+                    player: iframe,
+                    playerElement: player
+                }
+            });
+            document.dispatchEvent(customEvent);
+        }
+
+        handleYouTubeStateChange(event, videoId, playerElement) {
             const playerState = this.players.get(videoId);
             if (!playerState) return;
 
