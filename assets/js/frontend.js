@@ -1,10 +1,16 @@
-document.addEventListener('DOMContentLoaded', function() {
+/**
+ * Ekwa Video Block Frontend JavaScript - Vanilla JS
+ * With enhanced iOS/Safari support
+ */
+(function() {
     'use strict';
 
-    /**
-     * Ekwa Video Block Frontend JavaScript - Vanilla JS
-     * With enhanced iOS/Safari support
-     */
+    // Prevent double initialization
+    if (window.EkwaVideoPlayerInitialized) {
+        return;
+    }
+    window.EkwaVideoPlayerInitialized = true;
+
     class EkwaVideoPlayer {
         constructor() {
             this.players = new Map(); // Store player instances and states
@@ -1089,50 +1095,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // This allows us to handle pause/resume states and prevent related videos
     }
 
-    // Initialize the video player
-    const ekwaVideoPlayer = new EkwaVideoPlayer();
-
-    // Expose to global scope for debugging and external use
-    window.EkwaVideoPlayer = EkwaVideoPlayer;
-    
-    // Expose rebind function for use after carousel initialization
-    window.ekwaRebindTranscriptButtons = function() {
-        ekwaVideoPlayer.rebindAllTranscriptButtons();
-    };
-
-    // Handle lazy loading if intersection observer is available
-    if ('IntersectionObserver' in window) {
-        const lazyVideoObserver = new IntersectionObserver(function(entries) {
-            entries.forEach(function(entry) {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('ekwa-video-in-view');
-                    lazyVideoObserver.unobserve(entry.target);
-                }
-            });
-        });
-
-        document.querySelectorAll('.ekwa-video-wrapper, .ekv-wrapper').forEach(function(wrapper) {
-            lazyVideoObserver.observe(wrapper);
-        });
-    }
-
-    // Analytics tracking (optional)
-    document.addEventListener('ekwaVideoLoaded', function(e) {
-        // Track video load event
-        if (typeof gtag !== 'undefined') {
-            gtag('event', 'video_load', {
-                'video_type': e.detail.videoType,
-                'video_id': e.detail.videoId
-            });
-        }
-
-        // Custom tracking hook
-        const analyticsEvent = new CustomEvent('ekwa_video_analytics', {
-            detail: e.detail
-        });
-        document.dispatchEvent(analyticsEvent);
-    });
-
     // Responsive video handling
     function handleResponsiveVideos() {
         document.querySelectorAll('.ekwa-video-wrapper, .ekv-wrapper').forEach(function(wrapper) {
@@ -1213,13 +1175,72 @@ document.addEventListener('DOMContentLoaded', function() {
             repositionThumbnailOverlays();
         }
     };
-});
+
+    // Run initialization function
+    function initEkwaVideoPlayer() {
+        // Initialize the video player
+        const ekwaVideoPlayer = new EkwaVideoPlayer();
+
+        // Expose to global scope for debugging and external use
+        window.EkwaVideoPlayer = EkwaVideoPlayer;
+        
+        // Expose rebind function for use after carousel initialization
+        window.ekwaRebindTranscriptButtons = function() {
+            ekwaVideoPlayer.rebindAllTranscriptButtons();
+        };
+
+        // Handle lazy loading if intersection observer is available
+        if ('IntersectionObserver' in window) {
+            const lazyVideoObserver = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('ekwa-video-in-view');
+                        lazyVideoObserver.unobserve(entry.target);
+                    }
+                });
+            });
+
+            document.querySelectorAll('.ekwa-video-wrapper, .ekv-wrapper').forEach(function(wrapper) {
+                lazyVideoObserver.observe(wrapper);
+            });
+        }
+
+        // Analytics tracking (optional)
+        document.addEventListener('ekwaVideoLoaded', function(e) {
+            // Track video load event
+            if (typeof gtag !== 'undefined') {
+                gtag('event', 'video_load', {
+                    'video_type': e.detail.videoType,
+                    'video_id': e.detail.videoId
+                });
+            }
+
+            // Custom tracking hook
+            const analyticsEvent = new CustomEvent('ekwa_video_analytics', {
+                detail: e.detail
+            });
+            document.dispatchEvent(analyticsEvent);
+        });
+
+        // Initialize responsive handling
+        handleResponsiveVideos();
+    }
+
+    // Check if DOM is already ready (for lazy-loaded scripts)
+    if (document.readyState === 'loading') {
+        // DOM not ready yet, wait for it
+        document.addEventListener('DOMContentLoaded', initEkwaVideoPlayer);
+    } else {
+        // DOM is already ready, initialize immediately
+        initEkwaVideoPlayer();
+    }
+
+})();
 
 /**
  * GLightbox Integration for Ekwa Video Block
  * Lazy loads GLightbox library on user interaction
  */
-
 (function() {
     'use strict';
 
