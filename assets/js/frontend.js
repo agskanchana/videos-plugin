@@ -474,17 +474,15 @@
             // Get stored time if video was paused before
             const playerState = this.players.get(videoId) || { currentTime: 0 };
 
-            // Calculate proper height based on wrapper width and 16:9 aspect ratio
-            const wrapper = player.closest('.ekwa-video-wrapper, .ekv-wrapper');
-            const wrapperWidth = wrapper ? wrapper.offsetWidth : player.offsetWidth;
-            const aspectRatio = 9 / 16; // height / width for 16:9
-            const calculatedHeight = wrapperWidth * aspectRatio;
+            // Use thumbnail's actual height to prevent layout shift
+            const thumbnailRect = thumbnail.getBoundingClientRect();
+            const containerHeight = thumbnailRect.height;
 
-            // Set container to match calculated dimensions
+            // Set container to match thumbnail dimensions exactly
             Object.assign(container.style, {
                 position: 'relative',
                 width: '100%',
-                height: calculatedHeight + 'px',
+                height: containerHeight + 'px',
                 background: '#000',
                 display: 'none' // Keep hidden until ready
             });
@@ -795,17 +793,15 @@
             iframe.height = '100%';
             iframe.className = 'ekwa-video-iframe';
 
-            // Calculate proper height based on wrapper width and 16:9 aspect ratio
-            const wrapper = player.closest('.ekwa-video-wrapper, .ekv-wrapper');
-            const wrapperWidth = wrapper ? wrapper.offsetWidth : player.offsetWidth;
-            const aspectRatio = 9 / 16; // height / width for 16:9
-            const calculatedHeight = wrapperWidth * aspectRatio;
+            // Use thumbnail's actual height to prevent layout shift
+            const thumbnailRect = thumbnail.getBoundingClientRect();
+            const containerHeight = thumbnailRect.height;
 
-            // Set container to match calculated dimensions
+            // Set container to match thumbnail dimensions exactly
             Object.assign(container.style, {
                 position: 'relative',
                 width: '100%',
-                height: calculatedHeight + 'px',
+                height: containerHeight + 'px',
                 background: '#000'
             });
 
