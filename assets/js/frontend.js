@@ -477,17 +477,32 @@
             // Get container height - use multiple fallbacks to prevent layout shift
             const containerHeight = this.getVideoContainerHeight(player, thumbnail);
 
+            // CRITICAL: Position thumbnail absolutely BEFORE showing container
+            // This prevents layout shift by making them overlap instead of stack
+            Object.assign(thumbnail.style, {
+                position: 'absolute',
+                top: '0',
+                left: '0',
+                width: '100%',
+                height: containerHeight + 'px',
+                zIndex: '2'
+            });
+
+            // Ensure player has relative positioning for absolute children
+            player.style.position = 'relative';
+
             // Set container to match thumbnail dimensions exactly
             Object.assign(container.style, {
                 position: 'relative',
                 width: '100%',
                 height: containerHeight + 'px',
-                background: '#000',
-                display: 'none' // Keep hidden until ready
+                background: '#000'
             });
 
-            // Show container and fade thumbnail - don't wait for API
+            // Show container (thumbnail is now absolutely positioned over it)
             container.style.display = 'block';
+            
+            // Fade out thumbnail
             this.fadeOut(thumbnail, 300);
 
             // Try to load YouTube API, with fallback to iframe
@@ -794,6 +809,20 @@
 
             // Get container height - use multiple fallbacks to prevent layout shift
             const containerHeight = this.getVideoContainerHeight(player, thumbnail);
+
+            // CRITICAL: Position thumbnail absolutely BEFORE showing container
+            // This prevents layout shift by making them overlap instead of stack
+            Object.assign(thumbnail.style, {
+                position: 'absolute',
+                top: '0',
+                left: '0',
+                width: '100%',
+                height: containerHeight + 'px',
+                zIndex: '2'
+            });
+
+            // Ensure player has relative positioning for absolute children
+            player.style.position = 'relative';
 
             // Set container to match thumbnail dimensions exactly
             Object.assign(container.style, {
