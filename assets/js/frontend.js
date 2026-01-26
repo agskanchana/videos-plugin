@@ -288,12 +288,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             this.youtubeAPIPromise = new Promise((resolve, reject) => {
-                // Set timeout to prevent indefinite waiting
+                // Set timeout to prevent indefinite waiting - reduced to 5 seconds
                 const timeout = setTimeout(() => {
                     console.warn('YouTube API load timeout - using iframe fallback');
                     this.youtubeAPIReady = false;
                     resolve(null); // Resolve with null to use fallback
-                }, 10000);
+                }, 5000);
 
                 if (!window.ekwaYTLoading) {
                     window.ekwaYTLoading = true;
@@ -349,11 +349,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Prevent double-clicks / rapid taps
+            // Prevent double-clicks / rapid taps - but with a safety timeout
             if (thumbnail.dataset.ekwaLoading === 'true') {
-                return;
+                // Safety: reset after 3 seconds in case it got stuck
+                const loadingStarted = parseInt(thumbnail.dataset.ekwaLoadingTime || '0');
+                if (loadingStarted && (Date.now() - loadingStarted) > 3000) {
+                    console.warn('Loading state was stuck, resetting...');
+                    thumbnail.dataset.ekwaLoading = 'false';
+                } else {
+                    return;
+                }
             }
             thumbnail.dataset.ekwaLoading = 'true';
+            thumbnail.dataset.ekwaLoadingTime = Date.now().toString();
 
             // Support both old and new structure
             let player = thumbnail.closest('.ekwa-video-player');
@@ -390,27 +398,33 @@ document.addEventListener('DOMContentLoaded', function() {
             const autoplay = player.dataset.autoplay;
 
             if (!embedUrl || !videoType || !videoId) {
-                console.error('Missing video data');
+                console.error('Missing video data', { embedUrl, videoType, videoId });
                 thumbnail.dataset.ekwaLoading = 'false';
                 return;
             }
 
-            if (videoType === 'youtube') {
-                // Check if we have an existing player for this video
-                const existingPlayerState = this.players.get(videoId);
+            try {
+                if (videoType === 'youtube') {
+                    // Check if we have an existing player for this video
+                    const existingPlayerState = this.players.get(videoId);
 
-                if (existingPlayerState && existingPlayerState.player) {
-                    // Resume existing player
-                    this.resumeYouTubePlayer(existingPlayerState, thumbnail, player);
-                    thumbnail.dataset.ekwaLoading = 'false';
+                    if (existingPlayerState && existingPlayerState.player) {
+                        // Resume existing player
+                        this.resumeYouTubePlayer(existingPlayerState, thumbnail, player);
+                        thumbnail.dataset.ekwaLoading = 'false';
+                    } else {
+                        // Create new player
+                        const playerId = `player-${videoId}-${Date.now()}`;
+                        this.loadYouTubePlayer(player, container, thumbnail, videoId, playerId);
+                    }
+                } else if (videoType === 'vimeo') {
+                    this.loadVimeoPlayer(player, container, thumbnail, embedUrl);
                 } else {
-                    // Create new player
-                    const playerId = `player-${videoId}-${Date.now()}`;
-                    this.loadYouTubePlayer(player, container, thumbnail, videoId, playerId);
+                    console.warn('Unknown video type:', videoType);
+                    thumbnail.dataset.ekwaLoading = 'false';
                 }
-            } else if (videoType === 'vimeo') {
-                this.loadVimeoPlayer(player, container, thumbnail, embedUrl);
-            } else {
+            } catch (err) {
+                console.error('Error loading video:', err);
                 thumbnail.dataset.ekwaLoading = 'false';
             }
         }
@@ -469,24 +483,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 display: 'none' // Keep hidden until ready
             });
 
-            // Hide thumbnail first, then load player
-            this.fadeOut(thumbnail, 300, () => {
-                // Show container with exact same dimensions
-                container.style.display = 'block';
+            // Show container and fade thumbnail - don't wait for API
+            container.style.display = 'block';
+            this.fadeOut(thumbnail, 300);
 
-                // Try to load YouTube API, with fallback to iframe
-                this.loadYouTubeAPI().then((YT) => {
-                    if (YT && YT.Player) {
-                        // Use YouTube API for better control
-                        this.createYouTubeAPIPlayer(player, container, thumbnail, videoId, playerState);
-                    } else {
-                        // Fallback: Use standard iframe (more reliable on iOS/Safari)
-                        this.createYouTubeIframeFallback(player, container, thumbnail, videoId, playerState);
-                    }
-                }).catch(() => {
-                    // On error, use iframe fallback
+            // Try to load YouTube API, with fallback to iframe
+            this.loadYouTubeAPI().then((YT) => {
+                if (YT && YT.Player) {
+                    // Use YouTube API for better control
+                    this.createYouTubeAPIPlayer(player, container, thumbnail, videoId, playerState);
+                } else {
+                    // Fallback: Use standard iframe (more reliable on iOS/Safari)
                     this.createYouTubeIframeFallback(player, container, thumbnail, videoId, playerState);
-                });
+                }
+            }).catch((err) => {
+                console.warn('YouTube API error, using iframe fallback:', err);
+                // On error, use iframe fallback
+                this.createYouTubeIframeFallback(player, container, thumbnail, videoId, playerState);
             });
         }
 
@@ -577,18 +590,17 @@ document.addEventListener('DOMContentLoaded', function() {
         createYouTubeIframeFallback(player, container, thumbnail, videoId, playerState) {
             // Build iframe URL with all necessary parameters
             const startTime = Math.floor(playerState.currentTime || 0);
-            let iframeSrc = `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1&cc_load_policy=0&iv_load_policy=3`;
+            let iframeSrc = `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1&cc_load_policy=0&iv_load_policy=3&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
             
             if (startTime > 0) {
                 iframeSrc += `&start=${startTime}`;
             }
 
-            // Create iframe
+            // Create iframe - set attributes BEFORE setting src
             const iframe = document.createElement('iframe');
-            iframe.src = iframeSrc;
             iframe.frameBorder = '0';
             iframe.allowFullscreen = true;
-            // Critical: allow attribute for autoplay on iOS
+            // Critical: allow attribute for autoplay - must be set before src
             iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
             iframe.setAttribute('allowfullscreen', '');
             iframe.setAttribute('webkitallowfullscreen', '');
@@ -606,10 +618,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 border: 'none'
             });
 
+            // Clear container and add iframe first
             container.innerHTML = '';
             container.appendChild(iframe);
+            
+            // Set src AFTER iframe is in the DOM (important for some browsers on first load)
+            iframe.src = iframeSrc;
 
-            // Reset loading state
+            // Reset loading state immediately
             thumbnail.dataset.ekwaLoading = 'false';
 
             // Store reference (without YT.Player instance)
@@ -755,14 +771,17 @@ document.addEventListener('DOMContentLoaded', function() {
             // Build iframe source with autoplay and no related content
             let iframeSrc = embedUrl;
             const separator = embedUrl.includes('?') ? '&' : '?';
-            iframeSrc += separator + 'autoplay=1&title=0&byline=0&portrait=0&loop=0';
+            iframeSrc += separator + 'autoplay=1&title=0&byline=0&portrait=0&loop=0&playsinline=1';
 
             // Create iframe
             const iframe = document.createElement('iframe');
-            iframe.src = iframeSrc;
             iframe.frameBorder = '0';
             iframe.allowFullscreen = true;
-            iframe.allow = 'autoplay; encrypted-media';
+            // Critical: allow attribute for autoplay - must be set before src
+            iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen';
+            iframe.setAttribute('allowfullscreen', '');
+            iframe.setAttribute('webkitallowfullscreen', '');
+            iframe.setAttribute('mozallowfullscreen', '');
             iframe.width = '100%';
             iframe.height = '100%';
             iframe.className = 'ekwa-video-iframe';
@@ -790,15 +809,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 border: 'none'
             });
 
-            // Hide thumbnail and show iframe with fade effect
+            // Prepare container first, then load iframe
+            container.innerHTML = '';
+            container.appendChild(iframe);
+            
+            // Set src AFTER iframe is in DOM (important for some browsers)
+            iframe.src = iframeSrc;
+
+            // Hide thumbnail and show container immediately (don't wait for fade)
+            container.style.display = 'block';
+            player.classList.add('ekwa-video-loaded');
+            
+            // Reset loading flag immediately
+            thumbnail.dataset.ekwaLoading = 'false';
+
+            // Fade out thumbnail after container is visible
             this.fadeOut(thumbnail, 300, () => {
-                container.innerHTML = '';
-                container.appendChild(iframe);
-                container.style.display = 'block';
-
-                // Add loaded class to player
-                player.classList.add('ekwa-video-loaded');
-
                 // Trigger custom event on document for GA4 tracking
                 const customEvent = new CustomEvent('ekwaVideoLoaded', {
                     detail: {
