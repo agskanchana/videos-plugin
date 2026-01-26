@@ -1045,32 +1045,80 @@
 
         /**
          * Get reliable container height to prevent layout shift
-         * Uses multiple fallbacks: image dimensions, thumbnail rect, or calculated from width
+         * Uses multiple fallbacks including HTML attributes for first visit
          */
         getVideoContainerHeight(player, thumbnail) {
-            // Try 1: Get from the image element's rendered height
             const img = thumbnail.querySelector('img');
+            
+            // Try 1: Use stored computed height (set by precomputeHeights)
+            if (thumbnail.dataset.computedHeight) {
+                const storedHeight = parseFloat(thumbnail.dataset.computedHeight);
+                if (storedHeight > 0) {
+                    return storedHeight;
+                }
+            }
+
+            // Try 2: Get from the image element's rendered height
             if (img && img.offsetHeight > 0) {
                 return img.offsetHeight;
             }
 
-            // Try 2: Get from thumbnail's bounding rect
+            // Try 3: Get from thumbnail's bounding rect
             const thumbnailRect = thumbnail.getBoundingClientRect();
             if (thumbnailRect.height > 0) {
                 return thumbnailRect.height;
             }
 
-            // Try 3: Calculate from image's natural dimensions if available
+            // Try 4: Calculate from image's width/height HTML attributes
+            // This works on first visit before image fully renders
+            if (img) {
+                const attrWidth = img.getAttribute('width');
+                const attrHeight = img.getAttribute('height');
+                if (attrWidth && attrHeight) {
+                    const aspectRatio = parseFloat(attrHeight) / parseFloat(attrWidth);
+                    const containerWidth = thumbnail.offsetWidth || player.offsetWidth || thumbnailRect.width;
+                    if (containerWidth > 0) {
+                        return containerWidth * aspectRatio;
+                    }
+                }
+            }
+
+            // Try 5: Calculate from image's natural dimensions if available
             if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
                 const aspectRatio = img.naturalHeight / img.naturalWidth;
                 const width = thumbnail.offsetWidth || player.offsetWidth;
                 return width * aspectRatio;
             }
 
-            // Try 4: Calculate from player/wrapper width using 16:9 aspect ratio
+            // Try 6: Calculate from player/wrapper width using 16:9 aspect ratio
             const wrapper = player.closest('.ekwa-video-wrapper, .ekv-wrapper');
             const width = wrapper ? wrapper.offsetWidth : player.offsetWidth;
             return width * (9 / 16);
+        }
+
+        /**
+         * Precompute and store heights for all video thumbnails
+         * Called after images load to ensure accurate dimensions
+         */
+        precomputeHeights() {
+            document.querySelectorAll('.ekwa-video-thumbnail').forEach(thumbnail => {
+                const img = thumbnail.querySelector('img');
+                if (!img) return;
+
+                const storeHeight = () => {
+                    if (img.offsetHeight > 0) {
+                        thumbnail.dataset.computedHeight = img.offsetHeight;
+                    }
+                };
+
+                // Store immediately if image is loaded
+                if (img.complete && img.offsetHeight > 0) {
+                    storeHeight();
+                } else {
+                    // Store when image loads
+                    img.addEventListener('load', storeHeight, { once: true });
+                }
+            });
         }
 
         // Utility method to get video ID from URL
@@ -1204,6 +1252,9 @@
     function initEkwaVideoPlayer() {
         // Initialize the video player
         const ekwaVideoPlayer = new EkwaVideoPlayer();
+
+        // Precompute heights for all thumbnails to prevent layout shift
+        ekwaVideoPlayer.precomputeHeights();
 
         // Expose to global scope for debugging and external use
         window.EkwaVideoPlayer = EkwaVideoPlayer;
