@@ -1037,72 +1037,17 @@ class EkwaVideoBlock {
                 document.head.appendChild(script);
             }
 
-            // Override DOMContentLoaded behavior for lazy-loaded scripts
-            function wrapDOMContentLoaded() {
-                // Store the original addEventListener
-                const originalAddEventListener = Document.prototype.addEventListener;
-
-                // Override addEventListener temporarily
-                Document.prototype.addEventListener = function(type, listener, options) {
-                    if (type === 'DOMContentLoaded') {
-                        if (document.readyState === 'loading') {
-                            // DOM is still loading, use normal behavior
-                            originalAddEventListener.call(this, type, listener, options);
-                        } else {
-                            // DOM is already ready, execute immediately
-                            console.log('🔄 DOM already ready, executing listener immediately');
-                            if (typeof listener === 'function') {
-                                setTimeout(listener, 0);
-                            }
-                        }
-                    } else {
-                        // For all other events, use normal behavior
-                        originalAddEventListener.call(this, type, listener, options);
-                    }
-                };
-
-                // Restore original addEventListener after a short delay
-                setTimeout(function() {
-                    Document.prototype.addEventListener = originalAddEventListener;
-                    console.log('🔧 Restored original addEventListener');
-                }, 1000);
-            }
-
             function loadScripts() {
                 if (scriptsLoaded) return;
                 scriptsLoaded = true;
 
-                console.log('🚀 Loading Ekwa Video scripts...');
-
-                // Override DOMContentLoaded behavior before loading scripts
-                wrapDOMContentLoaded();
-
                 // Load frontend.js first
                 loadScript(config.frontendJsUrl, function() {
-                    console.log('✅ Frontend.js loaded');
-
                     // Load GA4 tracking if enabled
                     if (config.ga4Enabled) {
-                        loadScript(config.ga4TrackingUrl, function() {
-                            console.log('✅ GA4 tracking loaded');
-                        });
+                        loadScript(config.ga4TrackingUrl);
                     }
-                });                // Remove event listeners to prevent multiple loads
-                removeEventListeners();
-
-                // Remove this script element
-                const lazyLoader = document.getElementById('ekwa-video-lazy-loader');
-                if (lazyLoader) {
-                    lazyLoader.remove();
-                }
-            }
-
-            function removeEventListeners() {
-                window.removeEventListener('scroll', loadScripts);
-                window.removeEventListener('mousemove', loadScripts);
-                window.removeEventListener('touchstart', loadScripts);
-                window.removeEventListener('keydown', loadScripts);
-                document.removeEventListener('click', loadScripts);
+                });
             }
 
             // Check if video blocks exist on the page
@@ -1112,22 +1057,11 @@ class EkwaVideoBlock {
 
             // Only set up lazy loading if video blocks are present
             if (hasVideoBlocks()) {
-                // Add event listeners for user interaction
-                window.addEventListener('scroll', loadScripts, { passive: true });
-                window.addEventListener('mousemove', loadScripts, { passive: true });
-                window.addEventListener('touchstart', loadScripts, { passive: true });
-                window.addEventListener('keydown', loadScripts, { passive: true });
-                document.addEventListener('click', loadScripts, { passive: true });
+                // Load scripts immediately - don't wait for interaction
+                // This ensures click handlers are ready when user clicks play
+                loadScripts();
 
-                // Fallback: Load after 5 seconds if no interaction
-                setTimeout(function() {
-                    if (!scriptsLoaded) {
-                        console.log('⏰ Loading scripts after timeout (no user interaction)');
-                        loadScripts();
-                    }
-                }, 5000);
-
-                console.log('🎬 Ekwa Video lazy loader initialized - scripts will load on user interaction');
+                console.log('🎬 Ekwa Video: Loading scripts immediately (video blocks detected)');
             } else {
                 console.log('ℹ️ No video blocks found, skipping script loading');
             }
