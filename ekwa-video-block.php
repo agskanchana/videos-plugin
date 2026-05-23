@@ -3,7 +3,7 @@
  * Plugin Name: Ekwa Video Block
  * Plugin URI: https://www.ekwa.com
  * Description: A Gutenberg block for embedding YouTube and Vimeo videos with lazy loading and custom thumbnails
- * Version: 1.3.6
+ * Version: 1.3.8
  * Author: Ekwa Team
  * Author URI: https://www.ekwa.com
  * Text Domain: ekwa-video-block
@@ -32,7 +32,7 @@ $myUpdateChecker = PucFactory::buildUpdateChecker(
 
     
 // Define plugin constants
-define('EKWA_VIDEO_BLOCK_VERSION', '1.3.6');
+define('EKWA_VIDEO_BLOCK_VERSION', '1.3.8');
 define('EKWA_VIDEO_BLOCK_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('EKWA_VIDEO_BLOCK_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
@@ -423,19 +423,17 @@ class EkwaVideoBlock {
                             // Get thumbnail dimensions for better performance (prevent layout shift)
                             $thumb_dimensions = $this->get_thumbnail_dimensions($thumbnail_url, $attributes['video_type'], $attributes['custom_thumbnail']);
 
-                            // Check if active theme is "ekwa"
-                            $current_theme = wp_get_theme();
-                            $is_ekwa_theme = (strtolower($current_theme->get('TextDomain')) === 'ekwa' || strtolower($current_theme->get('Name')) === 'ekwa');
+                            $use_lazysizes = $this->should_use_lazysizes();
 
-                            // Use data-src and lazyload class only for ekwa theme
-                            $img_src_attr = $is_ekwa_theme ? 'data-src' : 'src';
-                            $img_classes = $is_ekwa_theme ? 'image-responsive ekwa-video-thumb-img lazyload' : 'image-responsive ekwa-video-thumb-img';
+                            $img_src_attr = $use_lazysizes ? 'data-src' : 'src';
+                            $img_classes = $use_lazysizes ? 'image-responsive ekwa-video-thumb-img lazyload' : 'image-responsive ekwa-video-thumb-img';
+                            $img_extra_attrs = $use_lazysizes ? '' : ' loading="lazy" decoding="async"';
                             ?>
                             <img <?php echo $img_src_attr; ?>="<?php echo esc_url($thumbnail_url); ?>"
                                  alt="<?php echo esc_attr($thumbnail_alt); ?>"
                                  width="<?php echo esc_attr($thumb_dimensions['width']); ?>"
                                  height="<?php echo esc_attr($thumb_dimensions['height']); ?>"
-                                 class="<?php echo esc_attr($img_classes); ?>">
+                                 class="<?php echo esc_attr($img_classes); ?>"<?php echo $img_extra_attrs; ?>>
                             <span class="playicon ekwa-video-play-button">
                                 <svg width="68" height="48" viewBox="0 0 68 48">
                                     <path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.63-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="#f00"></path>
@@ -461,10 +459,16 @@ class EkwaVideoBlock {
                             // Calculate aspect ratio for JS height calculation
                             $aspect_ratio = $thumb_dimensions['height'] / $thumb_dimensions['width'];
                             ?>
+                            <?php
+                            $use_lazysizes = $this->should_use_lazysizes();
+                            $img_src_attr = $use_lazysizes ? 'data-src' : 'src';
+                            $img_classes = $use_lazysizes ? 'image-responsive ekwa-video-thumb-img lazyload' : 'image-responsive ekwa-video-thumb-img';
+                            $img_loading_attr = $use_lazysizes ? '' : ' loading="lazy"';
+                            ?>
                             <div class="ekwa-video-thumbnail" data-embed-url="<?php echo esc_attr($attributes['embed_url']); ?>" data-aspect-ratio="<?php echo esc_attr($aspect_ratio); ?>">
-                                <img decoding="async"
-                                     class="image-responsive ls-is-cached lazyloaded ekwa-video-thumb-img"
-                                     src="<?php echo esc_url($thumbnail_url); ?>"
+                                <img decoding="async"<?php echo $img_loading_attr; ?>
+                                     class="<?php echo esc_attr($img_classes); ?>"
+                                     <?php echo $img_src_attr; ?>="<?php echo esc_url($thumbnail_url); ?>"
                                      alt="<?php echo esc_attr($thumbnail_alt); ?>"
                                      width="<?php echo esc_attr($thumb_dimensions['width']); ?>"
                                      height="<?php echo esc_attr($thumb_dimensions['height']); ?>">
@@ -775,6 +779,21 @@ class EkwaVideoBlock {
     }
 
     /**
+     * Whether to emit lazysizes-compatible markup (data-src + lazyload class)
+     * for thumbnail images. True when the user opted in via settings, or when
+     * the active theme is "ekwa" (which already ships lazysizes).
+     */
+    private function should_use_lazysizes() {
+        if (get_option('ekwa_video_lazysizes_enabled', false)) {
+            return true;
+        }
+
+        $current_theme = wp_get_theme();
+        return strtolower($current_theme->get('TextDomain')) === 'ekwa'
+            || strtolower($current_theme->get('Name')) === 'ekwa';
+    }
+
+    /**
      * Get thumbnail dimensions for width/height attributes
      * Returns array with width and height for 16:9 aspect ratio
      */
@@ -986,6 +1005,19 @@ class EkwaVideoBlock {
             );
         }
 
+        if (self::$has_video_blocks
+            && !is_admin()
+            && get_option('ekwa_video_lazysizes_load_script', false)
+        ) {
+            wp_enqueue_script(
+                'lazysizes',
+                EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/js/lazysizes.min.js',
+                array(),
+                '5.3.2',
+                true
+            );
+        }
+
         // Frontend.js will be lazy loaded via inline script in footer
         // No need to enqueue or localize here
     }
@@ -1109,6 +1141,8 @@ class EkwaVideoBlock {
     public function admin_init() {
         register_setting('ekwa_video_block_settings', 'ekwa_video_youtube_api_key');
         register_setting('ekwa_video_block_settings', 'ekwa_video_ga4_tracking');
+        register_setting('ekwa_video_block_settings', 'ekwa_video_lazysizes_enabled');
+        register_setting('ekwa_video_block_settings', 'ekwa_video_lazysizes_load_script');
 
         add_settings_section(
             'ekwa_video_block_main',
@@ -1138,6 +1172,29 @@ class EkwaVideoBlock {
             array($this, 'ga4_tracking_callback'),
             'ekwa-video-block',
             'ekwa_video_block_tracking'
+        );
+
+        add_settings_section(
+            'ekwa_video_block_performance',
+            'Performance',
+            array($this, 'performance_section_callback'),
+            'ekwa-video-block'
+        );
+
+        add_settings_field(
+            'ekwa_video_lazysizes_enabled',
+            'Enable lazysizes lazyloading',
+            array($this, 'lazysizes_enabled_callback'),
+            'ekwa-video-block',
+            'ekwa_video_block_performance'
+        );
+
+        add_settings_field(
+            'ekwa_video_lazysizes_load_script',
+            'Load lazysizes script from plugin',
+            array($this, 'lazysizes_load_script_callback'),
+            'ekwa-video-block',
+            'ekwa_video_block_performance'
         );
     }
 
@@ -1189,6 +1246,36 @@ class EkwaVideoBlock {
         echo '<input type="checkbox" id="ekwa_video_ga4_tracking" name="ekwa_video_ga4_tracking" value="1" ' . checked(1, $ga4_tracking, false) . ' />';
         echo '<label for="ekwa_video_ga4_tracking">Enable Google Analytics 4 video tracking</label>';
         echo '<p class="description">When enabled, video interactions will be tracked and sent to Google Analytics 4.</p>';
+    }
+
+    /**
+     * Performance section callback
+     */
+    public function performance_section_callback() {
+        echo '<p>Control how thumbnail images are lazy-loaded on the frontend.</p>';
+        echo '<p>The plugin does <strong>not</strong> bundle the <a href="https://github.com/aFarkas/lazysizes" target="_blank" rel="noopener">lazysizes</a> library. Enable the option below only if your theme (or another plugin) already loads lazysizes.</p>';
+    }
+
+    /**
+     * Lazysizes field callback
+     */
+    public function lazysizes_enabled_callback() {
+        $enabled = get_option('ekwa_video_lazysizes_enabled', false);
+        echo '<input type="hidden" name="ekwa_video_lazysizes_enabled" value="0" />';
+        echo '<input type="checkbox" id="ekwa_video_lazysizes_enabled" name="ekwa_video_lazysizes_enabled" value="1" ' . checked(1, $enabled, false) . ' />';
+        echo '<label for="ekwa_video_lazysizes_enabled">Output lazysizes-compatible markup for video thumbnails</label>';
+        echo '<p class="description">When enabled, thumbnail images use <code>data-src</code> and the <code>lazyload</code> class so lazysizes can handle them. Leave disabled to use the browser&rsquo;s native <code>loading="lazy"</code> attribute instead. (Auto-enabled when the active theme is &ldquo;ekwa&rdquo;.)</p>';
+    }
+
+    /**
+     * Lazysizes "load script from plugin" field callback
+     */
+    public function lazysizes_load_script_callback() {
+        $enabled = get_option('ekwa_video_lazysizes_load_script', false);
+        echo '<input type="hidden" name="ekwa_video_lazysizes_load_script" value="0" />';
+        echo '<input type="checkbox" id="ekwa_video_lazysizes_load_script" name="ekwa_video_lazysizes_load_script" value="1" ' . checked(1, $enabled, false) . ' />';
+        echo '<label for="ekwa_video_lazysizes_load_script">Load the bundled lazysizes script on the frontend</label>';
+        echo '<p class="description">Only enable this if your theme does <strong>not</strong> already load lazysizes. The plugin ships lazysizes v5.3.2 locally (no CDN). The script is only enqueued on pages that contain a video block.</p>';
     }
 
     /**
