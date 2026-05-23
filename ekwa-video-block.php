@@ -3,7 +3,7 @@
  * Plugin Name: Ekwa Video Block
  * Plugin URI: https://www.ekwa.com
  * Description: A Gutenberg block for embedding YouTube and Vimeo videos with lazy loading and custom thumbnails
- * Version: 1.3.8
+ * Version: 1.4.0
  * Author: Ekwa Team
  * Author URI: https://www.ekwa.com
  * Text Domain: ekwa-video-block
@@ -32,7 +32,7 @@ $myUpdateChecker = PucFactory::buildUpdateChecker(
 
     
 // Define plugin constants
-define('EKWA_VIDEO_BLOCK_VERSION', '1.3.8');
+define('EKWA_VIDEO_BLOCK_VERSION', '1.4.0');
 define('EKWA_VIDEO_BLOCK_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('EKWA_VIDEO_BLOCK_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
@@ -187,10 +187,6 @@ class EkwaVideoBlock {
                     'type' => 'boolean',
                     'default' => false,
                 ),
-                'autoplay' => array(
-                    'type' => 'boolean',
-                    'default' => false,
-                ),
                 'transcript' => array(
                     'type' => 'string',
                     'default' => '',
@@ -238,7 +234,6 @@ class EkwaVideoBlock {
         $custom_thumbnail = isset($attributes['customThumbnail']) ? $attributes['customThumbnail'] : array();
         $show_title = isset($attributes['showTitle']) ? $attributes['showTitle'] : true;
         $show_description = isset($attributes['showDescription']) ? $attributes['showDescription'] : false;
-        $autoplay = isset($attributes['autoplay']) ? $attributes['autoplay'] : false;
         $transcript = isset($attributes['transcript']) ? $attributes['transcript'] : '';
         $show_transcript = isset($attributes['showTranscript']) ? $attributes['showTranscript'] : false;
         $manual_info = isset($attributes['manualInfo']) ? $attributes['manualInfo'] : false;
@@ -258,7 +253,6 @@ class EkwaVideoBlock {
             'thumbnail_url' => $thumbnail_url,
             'show_title' => $show_title ? 'true' : 'false',
             'show_description' => $show_description ? 'true' : 'false',
-            'autoplay' => $autoplay ? 'true' : 'false',
             'transcript' => $transcript,
             'show_transcript' => $show_transcript ? 'true' : 'false',
             'manual_info' => $manual_info ? 'true' : 'false',
@@ -301,7 +295,6 @@ class EkwaVideoBlock {
             'custom_thumbnail_alt' => '',
             'show_title' => 'true',
             'show_description' => 'false',
-            'autoplay' => 'false',
             'transcript' => '',
             'show_transcript' => 'false',
             'manual_info' => 'false',
@@ -451,7 +444,7 @@ class EkwaVideoBlock {
                     </a>
                 <?php else: ?>
                     <!-- Regular Inline Player -->
-                    <div class="player ekwa-video-player" data-id="<?php echo esc_attr($attributes['video_id']); ?>" data-provider="<?php echo esc_attr($attributes['video_type']); ?>" data-video-type="<?php echo esc_attr($attributes['video_type']); ?>" data-video-id="<?php echo esc_attr($attributes['video_id']); ?>" data-autoplay="<?php echo esc_attr($attributes['autoplay']); ?>">
+                    <div class="player ekwa-video-player" data-id="<?php echo esc_attr($attributes['video_id']); ?>" data-provider="<?php echo esc_attr($attributes['video_type']); ?>" data-video-type="<?php echo esc_attr($attributes['video_type']); ?>" data-video-id="<?php echo esc_attr($attributes['video_id']); ?>">
                         <?php if (!empty($thumbnail_url)): ?>
                             <?php
                             // Get thumbnail dimensions for better performance (prevent layout shift)
@@ -1040,64 +1033,134 @@ class EkwaVideoBlock {
         $ga4_tracking_url = EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/js/ga4-tracking.js';
         $ga4_enabled = get_option('ekwa_video_ga4_tracking', false) ? 'true' : 'false';
         $version = EKWA_VIDEO_BLOCK_VERSION;
+        $defer_until_interaction = get_option('ekwa_video_defer_until_interaction', false) ? 'true' : 'false';
+        $inline_frontend_js = (bool) get_option('ekwa_video_inline_frontend_js', false);
+
+        $frontend_js_inline = 'null';
+        if ($inline_frontend_js) {
+            $frontend_js_path = EKWA_VIDEO_BLOCK_PLUGIN_PATH . 'assets/js/frontend.js';
+            if (is_readable($frontend_js_path)) {
+                $code = file_get_contents($frontend_js_path);
+                if ($code !== false) {
+                    // Guard against any literal </script> inside the source (none expected,
+                    // but be defensive so we never break the page).
+                    $code = str_replace('</script>', '<\/script>', $code);
+                    $frontend_js_inline = wp_json_encode($code);
+                }
+            }
+        }
         ?>
         <script id="ekwa-video-lazy-loader">
         (function() {
             'use strict';
 
-            let scriptsLoaded = false;
+            var scriptsLoaded = false;
+            var pendingClickTarget = null;
 
-            // Configuration
-            const config = {
+            var config = {
                 frontendJsUrl: '<?php echo esc_js($frontend_js_url); ?>?ver=<?php echo esc_js($version); ?>',
                 ga4TrackingUrl: '<?php echo esc_js($ga4_tracking_url); ?>?ver=<?php echo esc_js($version); ?>',
                 ga4Enabled: <?php echo $ga4_enabled; ?>,
-                pluginUrl: '<?php echo esc_js(EKWA_VIDEO_BLOCK_PLUGIN_URL); ?>'
+                pluginUrl: '<?php echo esc_js(EKWA_VIDEO_BLOCK_PLUGIN_URL); ?>',
+                deferUntilInteraction: <?php echo $defer_until_interaction; ?>,
+                frontendJsInline: <?php echo $frontend_js_inline; ?>
             };
 
-            // Set up ekwaVideoData globally before loading scripts
             window.ekwaVideoData = {
                 pluginUrl: config.pluginUrl
             };
 
             function loadScript(url, callback) {
-                const script = document.createElement('script');
-                script.src = url;
-                script.async = true;
-                script.onload = callback || function() {};
-                script.onerror = function() {
-                    console.error('Failed to load script:', url);
-                };
-                document.head.appendChild(script);
+                var s = document.createElement('script');
+                s.src = url;
+                s.async = true;
+                s.onload = callback || function() {};
+                s.onerror = function() { console.error('Failed to load script:', url); };
+                document.head.appendChild(s);
+            }
+
+            function executeInline(code, callback) {
+                var s = document.createElement('script');
+                s.textContent = code + '\n//# sourceURL=ekwa-video-frontend-inline.js';
+                document.head.appendChild(s);
+                if (callback) callback();
+            }
+
+            function loadFrontend(callback) {
+                if (config.frontendJsInline) {
+                    executeInline(config.frontendJsInline, callback);
+                } else {
+                    loadScript(config.frontendJsUrl, callback);
+                }
             }
 
             function loadScripts() {
                 if (scriptsLoaded) return;
                 scriptsLoaded = true;
-
-                // Load frontend.js first
-                loadScript(config.frontendJsUrl, function() {
-                    // Load GA4 tracking if enabled
+                removeInteractionListeners();
+                loadFrontend(function() {
                     if (config.ga4Enabled) {
                         loadScript(config.ga4TrackingUrl);
+                    }
+                    if (pendingClickTarget) {
+                        var target = pendingClickTarget;
+                        pendingClickTarget = null;
+                        // Replay the click that triggered the load so the user's play action is honored.
+                        setTimeout(function() {
+                            try {
+                                target.dispatchEvent(new MouseEvent('click', {
+                                    bubbles: true, cancelable: true, view: window
+                                }));
+                            } catch (e) {
+                                if (typeof target.click === 'function') target.click();
+                            }
+                        }, 30);
                     }
                 });
             }
 
-            // Check if video blocks exist on the page
+            var PLAYABLE_SELECTOR = '.ekwa-video-thumbnail, .ekwa-video-play-button, .ekwa-video-lightbox-trigger, .playicon';
+            var interactionEvents = ['scroll', 'mousemove', 'touchstart', 'keydown', 'click'];
+
+            function interactionHandler(e) {
+                if (e && (e.type === 'click' || e.type === 'touchstart')) {
+                    var playable = e.target && e.target.closest ? e.target.closest(PLAYABLE_SELECTOR) : null;
+                    if (playable) {
+                        // Hold the click — replay it once frontend.js is in place.
+                        e.preventDefault();
+                        e.stopPropagation();
+                        pendingClickTarget = playable;
+                    }
+                }
+                loadScripts();
+            }
+
+            function addInteractionListeners() {
+                for (var i = 0; i < interactionEvents.length; i++) {
+                    var ev = interactionEvents[i];
+                    var passive = (ev === 'click' || ev === 'touchstart') ? false : true;
+                    window.addEventListener(ev, interactionHandler, { capture: true, passive: passive });
+                }
+            }
+
+            function removeInteractionListeners() {
+                for (var i = 0; i < interactionEvents.length; i++) {
+                    window.removeEventListener(interactionEvents[i], interactionHandler, { capture: true });
+                }
+            }
+
             function hasVideoBlocks() {
                 return document.querySelector('.ekwa-video-wrapper, .ekv-wrapper, .ekwa-video-player, .glightbox');
             }
 
-            // Only set up lazy loading if video blocks are present
-            if (hasVideoBlocks()) {
-                // Load scripts immediately - don't wait for interaction
-                // This ensures click handlers are ready when user clicks play
-                loadScripts();
+            if (!hasVideoBlocks()) {
+                return;
+            }
 
-                console.log('🎬 Ekwa Video: Loading scripts immediately (video blocks detected)');
+            if (config.deferUntilInteraction) {
+                addInteractionListeners();
             } else {
-                console.log('ℹ️ No video blocks found, skipping script loading');
+                loadScripts();
             }
         })();
         </script>
@@ -1143,6 +1206,8 @@ class EkwaVideoBlock {
         register_setting('ekwa_video_block_settings', 'ekwa_video_ga4_tracking');
         register_setting('ekwa_video_block_settings', 'ekwa_video_lazysizes_enabled');
         register_setting('ekwa_video_block_settings', 'ekwa_video_lazysizes_load_script');
+        register_setting('ekwa_video_block_settings', 'ekwa_video_defer_until_interaction');
+        register_setting('ekwa_video_block_settings', 'ekwa_video_inline_frontend_js');
 
         add_settings_section(
             'ekwa_video_block_main',
@@ -1193,6 +1258,22 @@ class EkwaVideoBlock {
             'ekwa_video_lazysizes_load_script',
             'Load lazysizes script from plugin',
             array($this, 'lazysizes_load_script_callback'),
+            'ekwa-video-block',
+            'ekwa_video_block_performance'
+        );
+
+        add_settings_field(
+            'ekwa_video_defer_until_interaction',
+            'Defer scripts until user interaction',
+            array($this, 'defer_until_interaction_callback'),
+            'ekwa-video-block',
+            'ekwa_video_block_performance'
+        );
+
+        add_settings_field(
+            'ekwa_video_inline_frontend_js',
+            'Inline frontend.js',
+            array($this, 'inline_frontend_js_callback'),
             'ekwa-video-block',
             'ekwa_video_block_performance'
         );
@@ -1276,6 +1357,28 @@ class EkwaVideoBlock {
         echo '<input type="checkbox" id="ekwa_video_lazysizes_load_script" name="ekwa_video_lazysizes_load_script" value="1" ' . checked(1, $enabled, false) . ' />';
         echo '<label for="ekwa_video_lazysizes_load_script">Load the bundled lazysizes script on the frontend</label>';
         echo '<p class="description">Only enable this if your theme does <strong>not</strong> already load lazysizes. The plugin ships lazysizes v5.3.2 locally (no CDN). The script is only enqueued on pages that contain a video block.</p>';
+    }
+
+    /**
+     * "Defer scripts until interaction" field callback
+     */
+    public function defer_until_interaction_callback() {
+        $enabled = get_option('ekwa_video_defer_until_interaction', false);
+        echo '<input type="hidden" name="ekwa_video_defer_until_interaction" value="0" />';
+        echo '<input type="checkbox" id="ekwa_video_defer_until_interaction" name="ekwa_video_defer_until_interaction" value="1" ' . checked(1, $enabled, false) . ' />';
+        echo '<label for="ekwa_video_defer_until_interaction">Wait for scroll / mousemove / touch / click / keypress before loading frontend.js and the YouTube iframe API</label>';
+        echo '<p class="description">Reduces initial requests on pages with videos. The first click on a thumbnail before any other interaction is captured and replayed once the script finishes loading, so the play action is not lost.</p>';
+    }
+
+    /**
+     * "Inline frontend.js" field callback
+     */
+    public function inline_frontend_js_callback() {
+        $enabled = get_option('ekwa_video_inline_frontend_js', false);
+        echo '<input type="hidden" name="ekwa_video_inline_frontend_js" value="0" />';
+        echo '<input type="checkbox" id="ekwa_video_inline_frontend_js" name="ekwa_video_inline_frontend_js" value="1" ' . checked(1, $enabled, false) . ' />';
+        echo '<label for="ekwa_video_inline_frontend_js">Embed frontend.js inside the page instead of loading it as a separate file</label>';
+        echo '<p class="description">Removes one HTTP request. Adds ~60&nbsp;KB (uncompressed; ~15&nbsp;KB gzipped) to the page HTML. Combine with &ldquo;Defer scripts until user interaction&rdquo; for best results &mdash; the inlined code only runs after the first interaction.</p>';
     }
 
     /**

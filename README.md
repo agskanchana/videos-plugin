@@ -37,7 +37,7 @@ A modern WordPress Gutenberg block for embedding YouTube and Vimeo videos with a
 3. Paste a YouTube or Vimeo URL in the sidebar settings
 4. The plugin automatically fetches video metadata (title, thumbnail, duration, upload date)
 5. Optionally upload a custom thumbnail image
-6. Configure display settings (show title, description, autoplay, transcript, lightbox)
+6. Configure display settings (show title, description, transcript, lightbox)
 7. **To enable lightbox playback:** Toggle the "Open in Lightbox" option. The video will open in a popup when the thumbnail is clicked, and all Schema.org structured data is included for SEO
 8. Publish your post/page
 

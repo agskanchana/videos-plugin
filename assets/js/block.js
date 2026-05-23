@@ -84,10 +84,6 @@ registerBlockType('ekwa/video-block', {
             type: 'boolean',
             default: false,
         },
-        autoplay: {
-            type: 'boolean',
-            default: false,
-        },
         transcript: {
             type: 'string',
             default: '',
@@ -121,7 +117,6 @@ registerBlockType('ekwa/video-block', {
             customThumbnail,
             showTitle,
             showDescription,
-            autoplay,
             transcript,
             showTranscript,
             manualInfo,
@@ -508,14 +503,6 @@ registerBlockType('ekwa/video-block', {
                     }),
 
                     el(ToggleControl, {
-                        key: 'autoplay',
-                        label: __('Autoplay Video', 'ekwa-video-block'),
-                        checked: autoplay,
-                        onChange: function(value) { setAttributes({ autoplay: value }); },
-                        help: __('Note: Many browsers block autoplay videos with sound', 'ekwa-video-block')
-                    }),
-
-                    el(ToggleControl, {
                         key: 'open-lightbox',
                         label: __('Open in Lightbox', 'ekwa-video-block'),
                         checked: openInLightbox,
@@ -718,9 +705,6 @@ registerBlockType('ekwa/video-block', {
                             }
                             if (showDescription === true) {
                                 shortcode += ' show_description="true"';
-                            }
-                            if (autoplay === true) {
-                                shortcode += ' autoplay="true"';
                             }
                             if (openInLightbox === true) {
                                 shortcode += ' open_in_lightbox="true"';

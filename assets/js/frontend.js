@@ -401,7 +401,6 @@
             const embedUrl = thumbnail.dataset.embedUrl;
             let videoType = player.dataset.videoType || player.dataset.provider;
             let videoId = player.dataset.videoId || player.dataset.id;
-            const autoplay = player.dataset.autoplay;
 
             if (!embedUrl || !videoType || !videoId) {
                 console.error('Missing video data', { embedUrl, videoType, videoId });
