@@ -3,13 +3,13 @@
  * Plugin Name: Ekwa Video Block
  * Plugin URI: https://www.ekwa.com
  * Description: A Gutenberg block for embedding YouTube and Vimeo videos with lazy loading and custom thumbnails
- * Version: 1.4.0
+ * Version: 1.5.0
  * Author: Ekwa Team
  * Author URI: https://www.ekwa.com
  * Text Domain: ekwa-video-block
  * Domain Path: /languages
  * Requires at least: 5.0
- * Tested up to: 6.3
+ * Tested up to: 6.6
  * Requires PHP: 7.4
  *
  * @package EkwaVideoBlock
@@ -32,7 +32,7 @@ $myUpdateChecker = PucFactory::buildUpdateChecker(
 
     
 // Define plugin constants
-define('EKWA_VIDEO_BLOCK_VERSION', '1.4.0');
+define('EKWA_VIDEO_BLOCK_VERSION', '1.5.0');
 define('EKWA_VIDEO_BLOCK_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('EKWA_VIDEO_BLOCK_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
@@ -54,8 +54,18 @@ class EkwaVideoBlock {
         add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_assets'));
         add_action('wp_head', array($this, 'inline_critical_css'), 5);
         add_action('wp_footer', array($this, 'lazy_load_frontend_script'), 5);
+        add_filter('plugin_action_links_' . plugin_basename(__FILE__), array($this, 'add_plugin_action_links'));
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
+    }
+
+    /**
+     * Add a "Settings" link to the row on the Plugins listing screen.
+     */
+    public function add_plugin_action_links($links) {
+        $settings_link = '<a href="' . esc_url(admin_url('admin.php?page=ekwa-video-block')) . '">' . esc_html__('Settings', 'ekwa-video-block') . '</a>';
+        array_unshift($links, $settings_link);
+        return $links;
     }
 
     /**
@@ -109,19 +119,14 @@ class EkwaVideoBlock {
             }
         }
 
-        // For archive pages, check all posts in the loop
+        // For archive pages, check the first few posts in the loop
         if (is_home() || is_archive() || is_search()) {
             $posts = get_posts(array(
                 'post_type' => 'any',
-                'posts_per_page' => 10, // Check first 10 posts for performance
-                'meta_query' => array(
-                    'relation' => 'OR',
-                    array(
-                        'key' => '_',
-                        'value' => 'ekwa/video-block',
-                        'compare' => 'LIKE'
-                    )
-                )
+                'posts_per_page' => 10, // Limit for performance
+                'no_found_rows' => true,
+                'update_post_meta_cache' => false,
+                'update_post_term_cache' => false,
             ));
 
             foreach ($posts as $archive_post) {
@@ -354,8 +359,8 @@ class EkwaVideoBlock {
             $css_classes[] = 'ekwa-video-lightbox';
         }
 
-        // Generate unique ID for this video instance
-        $unique_id = 'ekwa-video-' . md5($attributes['video_url'] . time());
+        // Generate unique ID for this video instance (stable across renders so caching works)
+        $unique_id = 'ekwa-video-' . md5($attributes['video_url'] . '|' . $attributes['video_id']);
 
         // Mark that we have video blocks on this page
         self::$has_video_blocks = true;
@@ -411,32 +416,10 @@ class EkwaVideoBlock {
                        data-show-description="<?php echo esc_attr($attributes['show_description']); ?>"
                        data-show-transcript="<?php echo esc_attr($attributes['show_transcript']); ?>"
                        data-video-id="<?php echo esc_attr($attributes['video_id']); ?>">
-                        <?php if (!empty($thumbnail_url)): ?>
-                            <?php
-                            // Get thumbnail dimensions for better performance (prevent layout shift)
+                        <?php if (!empty($thumbnail_url)):
                             $thumb_dimensions = $this->get_thumbnail_dimensions($thumbnail_url, $attributes['video_type'], $attributes['custom_thumbnail']);
-
-                            $use_lazysizes = $this->should_use_lazysizes();
-
-                            $img_src_attr = $use_lazysizes ? 'data-src' : 'src';
-                            $img_classes = $use_lazysizes ? 'image-responsive ekwa-video-thumb-img lazyload' : 'image-responsive ekwa-video-thumb-img';
-                            $img_extra_attrs = $use_lazysizes ? '' : ' loading="lazy" decoding="async"';
-                            ?>
-                            <img <?php echo $img_src_attr; ?>="<?php echo esc_url($thumbnail_url); ?>"
-                                 alt="<?php echo esc_attr($thumbnail_alt); ?>"
-                                 width="<?php echo esc_attr($thumb_dimensions['width']); ?>"
-                                 height="<?php echo esc_attr($thumb_dimensions['height']); ?>"
-                                 class="<?php echo esc_attr($img_classes); ?>"<?php echo $img_extra_attrs; ?>>
-                            <span class="playicon ekwa-video-play-button">
-                                <svg width="68" height="48" viewBox="0 0 68 48">
-                                    <path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.63-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="#f00"></path>
-                                    <path d="M45 24L27 14v20" fill="#fff"></path>
-                                </svg>
-                            </span>
-                            <?php if (!empty($attributes['video_duration'])): ?>
-                                <div class="ekwa-video-duration"><?php echo esc_html($this->format_duration($attributes['video_duration'])); ?></div>
-                            <?php endif; ?>
-                        <?php else: ?>
+                            echo $this->render_thumbnail_inner($thumbnail_url, $thumbnail_alt, $thumb_dimensions, $attributes['video_duration']);
+                        else: ?>
                             <div class="ekwa-video-placeholder">
                                 <p><?php _e('Video thumbnail not available', 'ekwa-video-block'); ?></p>
                             </div>
@@ -445,36 +428,21 @@ class EkwaVideoBlock {
                 <?php else: ?>
                     <!-- Regular Inline Player -->
                     <div class="player ekwa-video-player" data-id="<?php echo esc_attr($attributes['video_id']); ?>" data-provider="<?php echo esc_attr($attributes['video_type']); ?>" data-video-type="<?php echo esc_attr($attributes['video_type']); ?>" data-video-id="<?php echo esc_attr($attributes['video_id']); ?>">
-                        <?php if (!empty($thumbnail_url)): ?>
-                            <?php
-                            // Get thumbnail dimensions for better performance (prevent layout shift)
+                        <?php if (!empty($thumbnail_url)):
                             $thumb_dimensions = $this->get_thumbnail_dimensions($thumbnail_url, $attributes['video_type'], $attributes['custom_thumbnail']);
                             // Calculate aspect ratio for JS height calculation
                             $aspect_ratio = $thumb_dimensions['height'] / $thumb_dimensions['width'];
+                            $play_label = !empty($attributes['video_title'])
+                                ? sprintf(__('Play video: %s', 'ekwa-video-block'), $attributes['video_title'])
+                                : __('Play video', 'ekwa-video-block');
                             ?>
-                            <?php
-                            $use_lazysizes = $this->should_use_lazysizes();
-                            $img_src_attr = $use_lazysizes ? 'data-src' : 'src';
-                            $img_classes = $use_lazysizes ? 'image-responsive ekwa-video-thumb-img lazyload' : 'image-responsive ekwa-video-thumb-img';
-                            $img_loading_attr = $use_lazysizes ? '' : ' loading="lazy"';
-                            ?>
-                            <div class="ekwa-video-thumbnail" data-embed-url="<?php echo esc_attr($attributes['embed_url']); ?>" data-aspect-ratio="<?php echo esc_attr($aspect_ratio); ?>">
-                                <img decoding="async"<?php echo $img_loading_attr; ?>
-                                     class="<?php echo esc_attr($img_classes); ?>"
-                                     <?php echo $img_src_attr; ?>="<?php echo esc_url($thumbnail_url); ?>"
-                                     alt="<?php echo esc_attr($thumbnail_alt); ?>"
-                                     width="<?php echo esc_attr($thumb_dimensions['width']); ?>"
-                                     height="<?php echo esc_attr($thumb_dimensions['height']); ?>">
-                                <span class="playicon ekwa-video-play-button">
-                                    <svg width="68" height="48" viewBox="0 0 68 48">
-                                        <path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.63-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="#f00"></path>
-                                        <path d="M45 24L27 14v20" fill="#fff"></path>
-                                    </svg>
-                                </span>
-                                <?php if (!empty($attributes['video_duration'])): ?>
-                                    <div class="ekwa-video-duration"><?php echo esc_html($this->format_duration($attributes['video_duration'])); ?></div>
-                                <?php endif; ?>
-                            </div>
+                            <button type="button"
+                                    class="ekwa-video-thumbnail"
+                                    data-embed-url="<?php echo esc_attr($attributes['embed_url']); ?>"
+                                    data-aspect-ratio="<?php echo esc_attr($aspect_ratio); ?>"
+                                    aria-label="<?php echo esc_attr($play_label); ?>">
+                                <?php echo $this->render_thumbnail_inner($thumbnail_url, $thumbnail_alt, $thumb_dimensions, $attributes['video_duration']); ?>
+                            </button>
                         <?php else: ?>
                             <div class="ekwa-video-placeholder">
                                 <p><?php _e('Video thumbnail not available', 'ekwa-video-block'); ?></p>
@@ -505,9 +473,13 @@ class EkwaVideoBlock {
 
             <?php if ($attributes['open_in_lightbox'] !== 'true' && $attributes['show_transcript'] === 'true' && !empty($attributes['transcript'])): ?>
                 <div class="video_transcript_btn">
-                    <button type="button" data-target="#transcript-<?php echo esc_attr($attributes['video_id']); ?>" class="btn-standard btn-vdo-trans btn-transcript ekv-button">
-                        Video Transcript
-                        <span class="trans-icon"></span>
+                    <button type="button"
+                            data-target="#transcript-<?php echo esc_attr($attributes['video_id']); ?>"
+                            class="btn-standard btn-vdo-trans btn-transcript ekv-button"
+                            aria-expanded="false"
+                            aria-controls="transcript-<?php echo esc_attr($attributes['video_id']); ?>">
+                        <?php esc_html_e('Video Transcript', 'ekwa-video-block'); ?>
+                        <span class="trans-icon" aria-hidden="true"></span>
                     </button>
                 </div>
 
@@ -522,9 +494,13 @@ class EkwaVideoBlock {
 
             <?php if ($attributes['open_in_lightbox'] === 'true' && $attributes['show_transcript'] === 'true' && !empty($attributes['transcript'])): ?>
                 <div class="video_transcript_btn">
-                    <button type="button" data-target="#transcript-<?php echo esc_attr($attributes['video_id']); ?>" class="btn-standard btn-vdo-trans btn-transcript ekv-button">
-                        Video Transcript
-                        <span class="trans-icon"></span>
+                    <button type="button"
+                            data-target="#transcript-<?php echo esc_attr($attributes['video_id']); ?>"
+                            class="btn-standard btn-vdo-trans btn-transcript ekv-button"
+                            aria-expanded="false"
+                            aria-controls="transcript-<?php echo esc_attr($attributes['video_id']); ?>">
+                        <?php esc_html_e('Video Transcript', 'ekwa-video-block'); ?>
+                        <span class="trans-icon" aria-hidden="true"></span>
                     </button>
                 </div>
 
@@ -583,6 +559,12 @@ class EkwaVideoBlock {
             return false;
         }
 
+        $cache_key = 'ekwa_video_meta_' . md5($video_type . '|' . $video_id);
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
         $metadata = array();
 
         if ($video_type === 'youtube') {
@@ -590,6 +572,11 @@ class EkwaVideoBlock {
         } elseif ($video_type === 'vimeo') {
             $metadata = $this->get_vimeo_metadata($video_id);
         }
+
+        // Cache positive results for a day, negative/empty results for 5 minutes
+        // so a transient API hiccup doesn't poison the cache.
+        $has_useful_data = is_array($metadata) && !empty($metadata['video_title']);
+        set_transient($cache_key, $metadata, $has_useful_data ? DAY_IN_SECONDS : 5 * MINUTE_IN_SECONDS);
 
         return $metadata;
     }
@@ -776,14 +763,55 @@ class EkwaVideoBlock {
      * for thumbnail images. True when the user opted in via settings, or when
      * the active theme is "ekwa" (which already ships lazysizes).
      */
+    /**
+     * Render the inner thumbnail markup (img + play icon + duration badge).
+     * Shared by the lightbox and inline-player branches so they cannot drift apart.
+     */
+    private function render_thumbnail_inner($thumbnail_url, $thumbnail_alt, $thumb_dimensions, $video_duration) {
+        $use_lazysizes = $this->should_use_lazysizes();
+        $img_src_attr = $use_lazysizes ? 'data-src' : 'src';
+        $img_classes = $use_lazysizes ? 'image-responsive ekwa-video-thumb-img lazyload' : 'image-responsive ekwa-video-thumb-img';
+        $img_loading = $use_lazysizes ? '' : ' loading="lazy"';
+
+        ob_start();
+        ?>
+        <img decoding="async"<?php echo $img_loading; ?>
+             class="<?php echo esc_attr($img_classes); ?>"
+             <?php echo $img_src_attr; ?>="<?php echo esc_url($thumbnail_url); ?>"
+             alt="<?php echo esc_attr($thumbnail_alt); ?>"
+             width="<?php echo esc_attr($thumb_dimensions['width']); ?>"
+             height="<?php echo esc_attr($thumb_dimensions['height']); ?>">
+        <span class="playicon ekwa-video-play-button" aria-hidden="true">
+            <svg width="68" height="48" viewBox="0 0 68 48" focusable="false" aria-hidden="true">
+                <path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.63-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="#f00"></path>
+                <path d="M45 24L27 14v20" fill="#fff"></path>
+            </svg>
+        </span>
+        <?php if (!empty($video_duration)) :
+            $formatted = $this->format_duration($video_duration);
+            $aria = sprintf(__('Duration: %s', 'ekwa-video-block'), $formatted);
+        ?>
+            <div class="ekwa-video-duration" aria-label="<?php echo esc_attr($aria); ?>"><?php echo esc_html($formatted); ?></div>
+        <?php endif;
+        return ob_get_clean();
+    }
+
     private function should_use_lazysizes() {
+        static $result = null;
+        if ($result !== null) {
+            return $result;
+        }
+
         if (get_option('ekwa_video_lazysizes_enabled', false)) {
-            return true;
+            $result = true;
+            return $result;
         }
 
         $current_theme = wp_get_theme();
-        return strtolower($current_theme->get('TextDomain')) === 'ekwa'
+        $result = strtolower($current_theme->get('TextDomain')) === 'ekwa'
             || strtolower($current_theme->get('Name')) === 'ekwa';
+
+        return $result;
     }
 
     /**
@@ -1202,12 +1230,32 @@ class EkwaVideoBlock {
      * Initialize admin settings
      */
     public function admin_init() {
-        register_setting('ekwa_video_block_settings', 'ekwa_video_youtube_api_key');
-        register_setting('ekwa_video_block_settings', 'ekwa_video_ga4_tracking');
-        register_setting('ekwa_video_block_settings', 'ekwa_video_lazysizes_enabled');
-        register_setting('ekwa_video_block_settings', 'ekwa_video_lazysizes_load_script');
-        register_setting('ekwa_video_block_settings', 'ekwa_video_defer_until_interaction');
-        register_setting('ekwa_video_block_settings', 'ekwa_video_inline_frontend_js');
+        $sanitize_bool = function($v) { return $v ? 1 : 0; };
+
+        register_setting('ekwa_video_block_settings', 'ekwa_video_youtube_api_key', array(
+            'sanitize_callback' => 'sanitize_text_field',
+            'default' => '',
+        ));
+        register_setting('ekwa_video_block_settings', 'ekwa_video_ga4_tracking', array(
+            'sanitize_callback' => $sanitize_bool,
+            'default' => 0,
+        ));
+        register_setting('ekwa_video_block_settings', 'ekwa_video_lazysizes_enabled', array(
+            'sanitize_callback' => $sanitize_bool,
+            'default' => 0,
+        ));
+        register_setting('ekwa_video_block_settings', 'ekwa_video_lazysizes_load_script', array(
+            'sanitize_callback' => $sanitize_bool,
+            'default' => 0,
+        ));
+        register_setting('ekwa_video_block_settings', 'ekwa_video_defer_until_interaction', array(
+            'sanitize_callback' => $sanitize_bool,
+            'default' => 0,
+        ));
+        register_setting('ekwa_video_block_settings', 'ekwa_video_inline_frontend_js', array(
+            'sanitize_callback' => $sanitize_bool,
+            'default' => 0,
+        ));
 
         add_settings_section(
             'ekwa_video_block_main',
@@ -1387,11 +1435,11 @@ class EkwaVideoBlock {
     public function admin_page() {
         ?>
         <div class="wrap">
-            <h1>Ekwa Video Block Settings</h1>
+            <h1><?php esc_html_e('Ekwa Video Block Settings', 'ekwa-video-block'); ?></h1>
 
             <?php if (isset($_GET['settings-updated']) && $_GET['settings-updated']): ?>
                 <div class="notice notice-success is-dismissible">
-                    <p><strong>Settings saved successfully!</strong></p>
+                    <p><strong><?php esc_html_e('Settings saved successfully!', 'ekwa-video-block'); ?></strong></p>
                 </div>
             <?php endif; ?>
 
@@ -1404,13 +1452,13 @@ class EkwaVideoBlock {
             </form>
 
             <div class="card" style="margin-top: 20px;">
-                <h2>Test Your Settings</h2>
-                <p>You can test if your YouTube API key is working by trying these sample URLs in the block editor:</p>
+                <h2><?php esc_html_e('Test Your Settings', 'ekwa-video-block'); ?></h2>
+                <p><?php esc_html_e('You can test if your YouTube API key is working by trying these sample URLs in the block editor:', 'ekwa-video-block'); ?></p>
                 <ul>
                     <li><strong>YouTube:</strong> https://www.youtube.com/watch?v=dQw4w9WgXcQ</li>
                     <li><strong>Vimeo:</strong> https://vimeo.com/148751763</li>
                 </ul>
-                <p>If the API key is working, you should see the video title, description, and duration automatically populate in the block editor.</p>
+                <p><?php esc_html_e('If the API key is working, you should see the video title, description, and duration automatically populate in the block editor.', 'ekwa-video-block'); ?></p>
             </div>
 
             <?php
@@ -1418,31 +1466,22 @@ class EkwaVideoBlock {
             if ($ga4_tracking):
             ?>
             <div class="card" style="margin-top: 20px;">
-                <h2>GA4 Video Tracking</h2>
-                <p><strong>✅ GA4 video tracking is enabled!</strong></p>
-                <p>The following events will be tracked:</p>
+                <h2><?php esc_html_e('GA4 Video Tracking', 'ekwa-video-block'); ?></h2>
+                <p><strong><?php esc_html_e('GA4 video tracking is enabled.', 'ekwa-video-block'); ?></strong></p>
+                <p><?php esc_html_e('The following events will be tracked:', 'ekwa-video-block'); ?></p>
                 <ul>
-                    <li><strong>video_start:</strong> When a video begins playing</li>
-                    <li><strong>video_progress:</strong> At 25%, 50%, and 75% completion milestones</li>
-                    <li><strong>video_pause:</strong> When a video is paused</li>
-                    <li><strong>video_complete:</strong> When a video finishes playing</li>
+                    <li><strong>video_start:</strong> <?php esc_html_e('When a video begins playing', 'ekwa-video-block'); ?></li>
+                    <li><strong>video_progress:</strong> <?php esc_html_e('At 25%, 50%, and 75% completion milestones', 'ekwa-video-block'); ?></li>
+                    <li><strong>video_pause:</strong> <?php esc_html_e('When a video is paused', 'ekwa-video-block'); ?></li>
+                    <li><strong>video_complete:</strong> <?php esc_html_e('When a video finishes playing', 'ekwa-video-block'); ?></li>
                 </ul>
-                <p><em>Make sure Google Analytics 4 (gtag) is properly installed on your website.</em></p>
-
-                <h3>Testing GA4 Events</h3>
-                <p>To test if events are being sent:</p>
-                <ol>
-                    <li>Open your browser's Developer Tools (F12)</li>
-                    <li>Go to the Console tab</li>
-                    <li>Play a video on your site</li>
-                    <li>Look for "📊 GA4 Event (Ekwa Video):" messages in the console</li>
-                </ol>
+                <p><em><?php esc_html_e('Make sure Google Analytics 4 (gtag) is properly installed on your website.', 'ekwa-video-block'); ?></em></p>
             </div>
             <?php else: ?>
             <div class="card" style="margin-top: 20px;">
-                <h2>GA4 Video Tracking</h2>
-                <p><strong>❌ GA4 video tracking is disabled.</strong></p>
-                <p>Enable it above to start tracking video engagement events in Google Analytics 4.</p>
+                <h2><?php esc_html_e('GA4 Video Tracking', 'ekwa-video-block'); ?></h2>
+                <p><strong><?php esc_html_e('GA4 video tracking is disabled.', 'ekwa-video-block'); ?></strong></p>
+                <p><?php esc_html_e('Enable it above to start tracking video engagement events in Google Analytics 4.', 'ekwa-video-block'); ?></p>
             </div>
             <?php endif; ?>
         </div>

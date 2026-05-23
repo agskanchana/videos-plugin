@@ -98,6 +98,16 @@
     touch-action: manipulation;
     user-select: none;
     -webkit-user-select: none;
+    /* Reset native <button> styling so the element behaves like the prior <div>. */
+    display: block;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: inherit;
 }
 
 .ekwa-video-thumbnail:hover {

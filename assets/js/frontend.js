@@ -39,8 +39,13 @@
                 }
             }, true);
 
-            // Handle play button click on loaded videos
+            // Handle play button click on loaded videos.
+            // Skip when inside a lightbox trigger anchor — that path is handled
+            // by the GLightbox click handler further down.
             document.addEventListener('click', (e) => {
+                if (e.target.closest('.ekwa-video-lightbox-trigger, .glightbox')) {
+                    return;
+                }
                 if (e.target.closest('.ekwa-video-play-button')) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -48,8 +53,12 @@
                 }
             }, true);
 
-            // Handle play icon click (for schema markup structure)
+            // Handle play icon click (for schema markup structure).
+            // Same lightbox exception applies.
             document.addEventListener('click', (e) => {
+                if (e.target.closest('.ekwa-video-lightbox-trigger, .glightbox')) {
+                    return;
+                }
                 if (e.target.closest('.playicon')) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -1390,22 +1399,7 @@
      * Setup lazy loading triggers
      */
     function setupLazyLoading() {
-        let hasTriggered = false;
         let clickHandlerAdded = false;
-
-        function triggerLoad() {
-            if (hasTriggered) return;
-            hasTriggered = true;
-
-            loadGLightbox().catch(function(error) {
-                console.error('Failed to load GLightbox:', error);
-            });
-
-            // Remove event listeners
-            window.removeEventListener('scroll', triggerLoad);
-            window.removeEventListener('mousemove', triggerLoad);
-            window.removeEventListener('touchstart', triggerLoad);
-        }
 
         function handleLightboxClick(event) {
             const lightboxTrigger = event.target.closest('.glightbox');
@@ -1445,18 +1439,12 @@
             }
         }
 
-        // Check if lightbox videos exist on page
-        if (document.querySelector('.glightbox')) {
-            // Add event listeners for lazy loading
-            window.addEventListener('scroll', triggerLoad, { passive: true });
-            window.addEventListener('mousemove', triggerLoad, { passive: true });
-            window.addEventListener('touchstart', triggerLoad, { passive: true });
-
-            // Handle immediate clicks on lightbox triggers only if GLightbox not loaded
-            if (!clickHandlerAdded) {
-                document.addEventListener('click', handleLightboxClick);
-                clickHandlerAdded = true;
-            }
+        // Wire up click-to-load on lightbox triggers. GLightbox itself is fetched
+        // on the first click rather than on any scroll/mousemove preload, since
+        // the PHP-side bootstrap already gates frontend.js on interaction.
+        if (document.querySelector('.glightbox') && !clickHandlerAdded) {
+            document.addEventListener('click', handleLightboxClick);
+            clickHandlerAdded = true;
         }
     }
 
