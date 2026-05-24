@@ -26,5 +26,7 @@ global $wpdb;
 $wpdb->query(
     "DELETE FROM {$wpdb->options}
      WHERE option_name LIKE '_transient_ekwa_video_meta_%'
-        OR option_name LIKE '_transient_timeout_ekwa_video_meta_%'"
+        OR option_name LIKE '_transient_timeout_ekwa_video_meta_%'
+        OR option_name LIKE '_transient_ekwa_video_transcript_%'
+        OR option_name LIKE '_transient_timeout_ekwa_video_transcript_%'"
 );

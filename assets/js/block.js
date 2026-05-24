@@ -125,6 +125,79 @@ registerBlockType('ekwa/video-block', {
 
         const [isLoading, setIsLoading] = useState(false);
         const [error, setError] = useState('');
+        const [fetchingTranscript, setFetchingTranscript] = useState(false);
+        const [transcriptStatus, setTranscriptStatus] = useState(null); // { type: 'success'|'warning'|'error', message }
+
+        /**
+         * Fetch YouTube transcript and populate the transcript field.
+         */
+        const fetchYouTubeTranscript = function(forceRefresh) {
+            if (fetchingTranscript || !videoUrl || videoType !== 'youtube') return;
+
+            setFetchingTranscript(true);
+            setTranscriptStatus({
+                type: 'info',
+                message: forceRefresh
+                    ? __('Retrying transcript fetch (skipping cache)…', 'ekwa-video-block')
+                    : __('Fetching transcript…', 'ekwa-video-block'),
+            });
+
+            const formData = new FormData();
+            formData.append('action', 'ekwa_fetch_youtube_transcript');
+            formData.append('nonce', ekwaVideoBlock.nonce);
+            formData.append('video_url', videoUrl);
+            if (forceRefresh) {
+                formData.append('force_refresh', '1');
+            }
+
+            fetch(ekwaVideoBlock.ajaxUrl, { method: 'POST', body: formData, credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(json) {
+                    if (json && json.success && json.data && json.data.transcript) {
+                        setAttributes({
+                            transcript: json.data.transcript,
+                            showTranscript: true,
+                        });
+                        if (json.data.source === 'auto') {
+                            setTranscriptStatus({
+                                type: 'warning',
+                                message: __('Transcript fetched (auto-generated — please review).', 'ekwa-video-block'),
+                            });
+                        } else {
+                            setTranscriptStatus({
+                                type: 'success',
+                                message: __('Transcript fetched.', 'ekwa-video-block'),
+                            });
+                        }
+                    } else {
+                        let message = (json && json.data && json.data.message)
+                            ? json.data.message
+                            : __('Failed to fetch transcript.', 'ekwa-video-block');
+                        if (json && json.data && json.data.debug) {
+                            try {
+                                const dbg = json.data.debug;
+                                const stages = Array.isArray(dbg.stages) ? dbg.stages.join(' → ') : '';
+                                const extras = Object.keys(dbg)
+                                    .filter(function(k) { return k !== 'stages'; })
+                                    .map(function(k) { return k + '=' + dbg[k]; })
+                                    .join(', ');
+                                message += ' [debug: ' + stages + (extras ? ' | ' + extras : '') + ']';
+                                console.log('[ekwa-video] transcript debug:', dbg);
+                            } catch (e) {}
+                        }
+                        setTranscriptStatus({ type: 'error', message: message });
+                    }
+                })
+                .catch(function() {
+                    setTranscriptStatus({
+                        type: 'error',
+                        message: __('Network error while fetching transcript.', 'ekwa-video-block'),
+                    });
+                })
+                .then(function() {
+                    setFetchingTranscript(false);
+                });
+        };
 
         /**
          * Fetch video metadata when URL changes
@@ -584,6 +657,38 @@ registerBlockType('ekwa/video-block', {
                         checked: showTranscript,
                         onChange: function(value) { setAttributes({ showTranscript: value }); }
                     }),
+
+                    el('div', { key: 'fetch-transcript-wrap', style: { marginBottom: '16px' } }, [
+                        el(Button, {
+                            key: 'fetch-transcript-btn',
+                            isSecondary: true,
+                            disabled: fetchingTranscript || !videoUrl || videoType !== 'youtube',
+                            onClick: function() { fetchYouTubeTranscript(false); },
+                        }, fetchingTranscript
+                            ? __('Fetching…', 'ekwa-video-block')
+                            : __('Fetch transcript from YouTube', 'ekwa-video-block')),
+                        transcriptStatus && transcriptStatus.type === 'error' && videoType === 'youtube' && el(Button, {
+                            key: 'retry-transcript-btn',
+                            isSecondary: true,
+                            disabled: fetchingTranscript,
+                            style: { marginLeft: '8px' },
+                            onClick: function() { fetchYouTubeTranscript(true); },
+                        }, __('Retry (skip cache)', 'ekwa-video-block')),
+                        videoType !== 'youtube' && el('p', {
+                            key: 'fetch-transcript-help',
+                            className: 'components-base-control__help',
+                            style: { marginTop: '4px', fontStyle: 'italic' },
+                        }, __('Available for YouTube videos only.', 'ekwa-video-block')),
+                        transcriptStatus && el(Notice, {
+                            key: 'fetch-transcript-notice',
+                            status: transcriptStatus.type === 'warning' ? 'warning'
+                                : transcriptStatus.type === 'error' ? 'error'
+                                : transcriptStatus.type === 'success' ? 'success'
+                                : 'info',
+                            isDismissible: true,
+                            onRemove: function() { setTranscriptStatus(null); },
+                        }, transcriptStatus.message),
+                    ]),
 
                     showTranscript && el(TextareaControl, {
                         key: 'transcript',

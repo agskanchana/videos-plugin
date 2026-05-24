@@ -3,7 +3,7 @@
  * Plugin Name: Ekwa Video Block
  * Plugin URI: https://www.ekwa.com
  * Description: A Gutenberg block for embedding YouTube and Vimeo videos with lazy loading and custom thumbnails
- * Version: 1.5.0
+ * Version: 1.6.0
  * Author: Ekwa Team
  * Author URI: https://www.ekwa.com
  * Text Domain: ekwa-video-block
@@ -32,7 +32,7 @@ $myUpdateChecker = PucFactory::buildUpdateChecker(
 
     
 // Define plugin constants
-define('EKWA_VIDEO_BLOCK_VERSION', '1.5.0');
+define('EKWA_VIDEO_BLOCK_VERSION', '1.6.0');
 define('EKWA_VIDEO_BLOCK_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('EKWA_VIDEO_BLOCK_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
@@ -715,6 +715,332 @@ class EkwaVideoBlock {
     }
 
     /**
+     * Fetch a YouTube video's transcript.
+     *
+     * First tries scraping ytInitialPlayerResponse out of the watch page;
+     * if that yields no caption tracks (common on hosting IPs that get a
+     * stripped/consent-gated response) it falls back to the InnerTube
+     * youtubei/v1/player endpoint.
+     *
+     * Returns array('text' => string, 'source' => 'human'|'auto') on success,
+     * or false when no usable captions exist.
+     *
+     * Caches hits for 30 days and misses for 5 minutes so a transient
+     * upstream failure does not lock the video out for an hour.
+     */
+    public function fetch_youtube_transcript($video_id, $force_refresh = false, &$debug = null) {
+        if (!is_array($debug)) {
+            $debug = array();
+        }
+        $debug['stages'] = array();
+
+        if (empty($video_id)) {
+            $debug['stages'][] = 'empty_video_id';
+            return false;
+        }
+
+        $cache_key = 'ekwa_video_transcript_' . md5($video_id);
+        if ($force_refresh) {
+            delete_transient($cache_key);
+            $debug['stages'][] = 'cache_busted';
+        } else {
+            $cached = get_transient($cache_key);
+            if ($cached !== false) {
+                $debug['stages'][] = ($cached === '__none__') ? 'cache_hit_none' : 'cache_hit';
+                return $cached === '__none__' ? false : $cached;
+            }
+        }
+
+        $tracks = $this->get_youtube_caption_tracks_from_watch_page($video_id, $debug);
+        if (empty($tracks)) {
+            $tracks = $this->get_youtube_caption_tracks_from_innertube($video_id, $debug);
+        }
+
+        if (empty($tracks)) {
+            $debug['stages'][] = 'no_tracks_from_any_source';
+            set_transient($cache_key, '__none__', 5 * MINUTE_IN_SECONDS);
+            return false;
+        }
+
+        $pick = $this->pick_youtube_caption_track($tracks);
+        if (!$pick || empty($pick['baseUrl'])) {
+            $debug['stages'][] = 'pick_failed_or_no_baseurl';
+            set_transient($cache_key, '__none__', 5 * MINUTE_IN_SECONDS);
+            return false;
+        }
+
+        $debug['picked_lang'] = $pick['languageCode'] ?? '';
+        $debug['picked_kind'] = $pick['kind'] ?? '';
+
+        $text = $this->fetch_caption_text_json3($pick['baseUrl'], $debug);
+        if ($text === null) {
+            // json3 endpoint failed or returned no events — fall back to XML/srv1.
+            $text = $this->fetch_caption_text_xml($pick['baseUrl'], $debug);
+        }
+
+        if ($text === null) {
+            return false; // network/HTTP errors already recorded; don't cache
+        }
+        if ($text === '') {
+            $debug['stages'][] = 'caption_text_empty';
+            set_transient($cache_key, '__none__', 5 * MINUTE_IN_SECONDS);
+            return false;
+        }
+
+        $debug['stages'][] = 'success';
+        $result = array(
+            'text'   => $text,
+            'source' => (($pick['kind'] ?? '') === 'asr') ? 'auto' : 'human',
+        );
+        set_transient($cache_key, $result, 30 * DAY_IN_SECONDS);
+        return $result;
+    }
+
+    /**
+     * Scrape captionTracks out of the public watch page.
+     */
+    private function get_youtube_caption_tracks_from_watch_page($video_id, &$debug = null) {
+        $watch_url = 'https://www.youtube.com/watch?v=' . rawurlencode($video_id);
+        $response = wp_remote_get($watch_url, array(
+            'timeout' => 15,
+            'redirection' => 5,
+            'headers' => array(
+                'Accept-Language' => 'en-US,en;q=0.9',
+                'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Cookie'          => 'CONSENT=YES+cb',
+            ),
+        ));
+
+        if (is_wp_error($response)) {
+            if (is_array($debug)) { $debug['stages'][] = 'watch_wp_error: ' . $response->get_error_message(); }
+            return null;
+        }
+        $code = wp_remote_retrieve_response_code($response);
+        if ($code !== 200) {
+            if (is_array($debug)) { $debug['stages'][] = 'watch_http_' . $code; }
+            return null;
+        }
+
+        $html = wp_remote_retrieve_body($response);
+        if (is_array($debug)) { $debug['watch_html_len'] = strlen($html); }
+
+        if (!preg_match('/ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;\s*(?:var|<\/script>)/s', $html, $m)) {
+            if (is_array($debug)) {
+                $debug['stages'][] = 'watch_regex_no_match';
+                $debug['watch_has_ytInitialPlayerResponse'] = (strpos($html, 'ytInitialPlayerResponse') !== false);
+                $debug['watch_has_captionTracks'] = (strpos($html, 'captionTracks') !== false);
+            }
+            return null;
+        }
+
+        $data = json_decode($m[1], true);
+        $tracks = isset($data['captions']['playerCaptionsTracklistRenderer']['captionTracks'])
+            ? $data['captions']['playerCaptionsTracklistRenderer']['captionTracks']
+            : null;
+
+        if (is_array($debug)) {
+            $debug['watch_playability'] = isset($data['playabilityStatus']['status']) ? $data['playabilityStatus']['status'] : '?';
+            $debug['watch_track_count'] = is_array($tracks) ? count($tracks) : 0;
+            $debug['stages'][] = 'watch_parsed';
+        }
+
+        return (is_array($tracks) && !empty($tracks)) ? $tracks : null;
+    }
+
+    /**
+     * Fallback: ask YouTube's InnerTube player endpoint directly. Datacenter
+     * IPs that get a stripped watch page usually still get a full response
+     * here, and the response shape (captions.playerCaptionsTracklistRenderer.captionTracks)
+     * is the same as the watch-page payload.
+     */
+    private function get_youtube_caption_tracks_from_innertube($video_id, &$debug = null) {
+        $endpoint = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false';
+        $body = wp_json_encode(array(
+            'videoId' => $video_id,
+            'context' => array(
+                'client' => array(
+                    'clientName'    => 'WEB',
+                    'clientVersion' => '2.20240101.00.00',
+                    'hl'            => 'en',
+                    'gl'            => 'US',
+                ),
+            ),
+        ));
+
+        $response = wp_remote_post($endpoint, array(
+            'timeout' => 15,
+            'headers' => array(
+                'Content-Type'      => 'application/json',
+                'Accept'            => 'application/json',
+                'Accept-Language'   => 'en-US,en;q=0.9',
+                'User-Agent'        => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'X-Youtube-Client-Name'    => '1',
+                'X-Youtube-Client-Version' => '2.20240101.00.00',
+                'Origin'            => 'https://www.youtube.com',
+                'Referer'           => 'https://www.youtube.com/',
+            ),
+            'body' => $body,
+        ));
+
+        if (is_wp_error($response)) {
+            if (is_array($debug)) { $debug['stages'][] = 'innertube_wp_error: ' . $response->get_error_message(); }
+            return null;
+        }
+        $code = wp_remote_retrieve_response_code($response);
+        if ($code !== 200) {
+            if (is_array($debug)) { $debug['stages'][] = 'innertube_http_' . $code; }
+            return null;
+        }
+
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+        $tracks = isset($data['captions']['playerCaptionsTracklistRenderer']['captionTracks'])
+            ? $data['captions']['playerCaptionsTracklistRenderer']['captionTracks']
+            : null;
+
+        if (is_array($debug)) {
+            $debug['innertube_playability'] = isset($data['playabilityStatus']['status']) ? $data['playabilityStatus']['status'] : '?';
+            $debug['innertube_track_count'] = is_array($tracks) ? count($tracks) : 0;
+            $debug['stages'][] = 'innertube_parsed';
+        }
+
+        return (is_array($tracks) && !empty($tracks)) ? $tracks : null;
+    }
+
+    /**
+     * Preference order: English human → en-* human → English auto → first human → first track.
+     */
+    private function pick_youtube_caption_track($tracks) {
+        foreach ($tracks as $t) {
+            if (($t['languageCode'] ?? '') === 'en' && empty($t['kind'])) { return $t; }
+        }
+        foreach ($tracks as $t) {
+            if (strpos($t['languageCode'] ?? '', 'en') === 0 && empty($t['kind'])) { return $t; }
+        }
+        foreach ($tracks as $t) {
+            if (($t['languageCode'] ?? '') === 'en' && ($t['kind'] ?? '') === 'asr') { return $t; }
+        }
+        foreach ($tracks as $t) {
+            if (empty($t['kind'])) { return $t; }
+        }
+        return $tracks[0] ?? null;
+    }
+
+    /**
+     * Fetch a caption track in json3 format and return the joined text.
+     * Returns:
+     *   - string text on success (may be '' if all events were empty),
+     *   - null on network/HTTP failure OR when json3 has no usable events
+     *     (so the caller can fall back to XML).
+     */
+    private function fetch_caption_text_json3($base_url, &$debug = null) {
+        $url = $this->build_caption_url($base_url, 'json3');
+        $resp = wp_remote_get($url, array('timeout' => 15));
+        if (is_wp_error($resp)) {
+            if (is_array($debug)) { $debug['stages'][] = 'caption_json3_wp_error: ' . $resp->get_error_message(); }
+            return null;
+        }
+        $code = wp_remote_retrieve_response_code($resp);
+        if ($code !== 200) {
+            if (is_array($debug)) { $debug['stages'][] = 'caption_json3_http_' . $code; }
+            return null;
+        }
+
+        $body = wp_remote_retrieve_body($resp);
+        if (is_array($debug)) { $debug['caption_json3_body_len'] = strlen($body); }
+
+        $json = json_decode($body, true);
+        if (empty($json['events']) || !is_array($json['events'])) {
+            if (is_array($debug)) { $debug['stages'][] = 'caption_json3_no_events'; }
+            return null;
+        }
+
+        $text = '';
+        foreach ($json['events'] as $event) {
+            if (empty($event['segs']) || !is_array($event['segs'])) {
+                continue;
+            }
+            foreach ($event['segs'] as $seg) {
+                $piece = isset($seg['utf8']) ? $seg['utf8'] : '';
+                if ($piece === '' || $piece === "\n") {
+                    continue;
+                }
+                $trimmed = trim($piece);
+                if ($trimmed !== '' && preg_match('/^[\[\(].*[\]\)]$/', $trimmed)) {
+                    continue;
+                }
+                $text .= $piece;
+            }
+            $text .= ' ';
+        }
+
+        if (is_array($debug)) { $debug['stages'][] = 'caption_json3_ok'; }
+        return trim(preg_replace('/\s+/', ' ', $text));
+    }
+
+    /**
+     * Fallback: fetch caption track as YouTube's default XML (srv1) and
+     * extract the text from <text>…</text> nodes. Used when json3 returns
+     * 200 but no events — a known quirk with some ASR tracks.
+     */
+    private function fetch_caption_text_xml($base_url, &$debug = null) {
+        $url = $this->build_caption_url($base_url, null); // default = XML
+        $resp = wp_remote_get($url, array('timeout' => 15));
+        if (is_wp_error($resp)) {
+            if (is_array($debug)) { $debug['stages'][] = 'caption_xml_wp_error: ' . $resp->get_error_message(); }
+            return null;
+        }
+        $code = wp_remote_retrieve_response_code($resp);
+        if ($code !== 200) {
+            if (is_array($debug)) { $debug['stages'][] = 'caption_xml_http_' . $code; }
+            return null;
+        }
+
+        $body = wp_remote_retrieve_body($resp);
+        if (is_array($debug)) { $debug['caption_xml_body_len'] = strlen($body); }
+
+        if ($body === '' || stripos($body, '<text') === false) {
+            if (is_array($debug)) { $debug['stages'][] = 'caption_xml_empty_or_no_text_nodes'; }
+            return null;
+        }
+
+        $previous = libxml_use_internal_errors(true);
+        $xml = simplexml_load_string($body);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        if ($xml === false) {
+            if (is_array($debug)) { $debug['stages'][] = 'caption_xml_parse_failed'; }
+            return null;
+        }
+
+        $text = '';
+        foreach ($xml->text as $node) {
+            $piece = html_entity_decode((string) $node, ENT_QUOTES | ENT_XML1, 'UTF-8');
+            $piece = trim($piece);
+            if ($piece === '') { continue; }
+            if (preg_match('/^[\[\(].*[\]\)]$/', $piece)) { continue; }
+            $text .= $piece . ' ';
+        }
+
+        if (is_array($debug)) { $debug['stages'][] = 'caption_xml_ok'; }
+        return trim(preg_replace('/\s+/', ' ', $text));
+    }
+
+    /**
+     * Apply a desired fmt to a caption baseUrl, stripping any existing
+     * fmt= so we don't double up.
+     */
+    private function build_caption_url($base_url, $fmt) {
+        $url = preg_replace('/([?&])fmt=[^&]*(&|$)/', '$1', $base_url);
+        $url = rtrim($url, '?&');
+        if ($fmt === null || $fmt === '') {
+            return $url;
+        }
+        $sep = (strpos($url, '?') !== false) ? '&' : '?';
+        return $url . $sep . 'fmt=' . rawurlencode($fmt);
+    }
+
+    /**
      * Convert seconds to ISO 8601 duration format
      */
     private function seconds_to_iso8601($seconds) {
@@ -925,11 +1251,16 @@ class EkwaVideoBlock {
      * Enqueue block editor assets
      */
     public function enqueue_block_editor_assets() {
+        $block_js_path = EKWA_VIDEO_BLOCK_PLUGIN_PATH . 'assets/js/block.js';
+        $editor_css_path = EKWA_VIDEO_BLOCK_PLUGIN_PATH . 'assets/css/editor.css';
+        $block_js_ver = file_exists($block_js_path) ? filemtime($block_js_path) : EKWA_VIDEO_BLOCK_VERSION;
+        $editor_css_ver = file_exists($editor_css_path) ? filemtime($editor_css_path) : EKWA_VIDEO_BLOCK_VERSION;
+
         wp_enqueue_script(
             'ekwa-video-block-editor',
             EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/js/block.js',
             array('wp-blocks', 'wp-i18n', 'wp-element', 'wp-components', 'wp-block-editor'),
-            EKWA_VIDEO_BLOCK_VERSION,
+            $block_js_ver,
             true
         );
 
@@ -937,7 +1268,7 @@ class EkwaVideoBlock {
             'ekwa-video-block-editor',
             EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/css/editor.css',
             array('wp-edit-blocks'),
-            EKWA_VIDEO_BLOCK_VERSION
+            $editor_css_ver
         );
 
         // Localize script for AJAX
@@ -1498,6 +1829,65 @@ add_action('wp_ajax_nopriv_ekwa_get_video_metadata', 'ekwa_get_video_metadata_aj
 
 // AJAX handler for uploading cropped thumbnail
 add_action('wp_ajax_ekwa_upload_cropped_thumbnail', 'ekwa_upload_cropped_thumbnail_ajax');
+
+// AJAX handler for fetching a YouTube transcript (editor-only — no nopriv).
+add_action('wp_ajax_ekwa_fetch_youtube_transcript', 'ekwa_fetch_youtube_transcript_ajax');
+
+function ekwa_fetch_youtube_transcript_ajax() {
+    check_ajax_referer('ekwa_video_block_nonce', 'nonce');
+
+    if (!current_user_can('edit_posts')) {
+        wp_send_json_error(array('code' => 'forbidden', 'message' => __('Insufficient permissions.', 'ekwa-video-block')));
+        return;
+    }
+
+    $video_url = isset($_POST['video_url']) ? esc_url_raw(wp_unslash($_POST['video_url'])) : '';
+    if (empty($video_url)) {
+        wp_send_json_error(array('code' => 'invalid_url', 'message' => __('Missing video URL.', 'ekwa-video-block')));
+        return;
+    }
+
+    $plugin = new EkwaVideoBlock();
+    $info = $plugin->extract_video_info($video_url);
+
+    if (empty($info['video_type']) || empty($info['video_id'])) {
+        wp_send_json_error(array('code' => 'invalid_url', 'message' => __('Could not parse video URL.', 'ekwa-video-block')));
+        return;
+    }
+
+    if ($info['video_type'] !== 'youtube') {
+        wp_send_json_error(array('code' => 'not_youtube', 'message' => __('Transcript fetching is only supported for YouTube videos.', 'ekwa-video-block')));
+        return;
+    }
+
+    $force_refresh = !empty($_POST['force_refresh']);
+    $debug = array();
+    $result = $plugin->fetch_youtube_transcript($info['video_id'], $force_refresh, $debug);
+    if (!$result) {
+        // Distinguish "captions tracklist existed but YouTube returned empty
+        // bodies for every format" (locked content) from "no tracks at all".
+        $tracks_existed = (isset($debug['watch_track_count']) && $debug['watch_track_count'] > 0)
+            || (isset($debug['innertube_track_count']) && $debug['innertube_track_count'] > 0);
+        if ($tracks_existed) {
+            $code = 'captions_locked';
+            $message = __('This video lists captions but YouTube is not serving them through its public API. They are visible only inside the YouTube player itself, so the transcript cannot be fetched automatically — please paste it in manually.', 'ekwa-video-block');
+        } else {
+            $code = 'no_captions';
+            $message = __('No captions available for this video.', 'ekwa-video-block');
+        }
+        wp_send_json_error(array(
+            'code'    => $code,
+            'message' => $message,
+            'debug'   => $debug,
+        ));
+        return;
+    }
+
+    wp_send_json_success(array(
+        'transcript' => $result['text'],
+        'source'     => $result['source'],
+    ));
+}
 
 function ekwa_get_video_metadata_ajax() {
     check_ajax_referer('ekwa_video_block_nonce', 'nonce');
