@@ -1351,12 +1351,12 @@ class EkwaVideoBlock {
      * Enqueue frontend assets
      */
     public function enqueue_frontend_assets() {
-        // When inlining is enabled (default), don't enqueue the CSS file except as
-        // a fallback for pages where no video blocks have been detected yet.
-        // When inlining is disabled, always load frontend.css as a separate file.
+        // When inlining is enabled (default), the CSS is printed inline at render
+        // time, so the file is never enqueued. When inlining is disabled, load
+        // frontend.css as a separate stylesheet.
         $inline_frontend_css = (bool) get_option('ekwa_video_inline_frontend_css', true);
 
-        if (!is_admin() && (!$inline_frontend_css || !self::$has_video_blocks)) {
+        if (!is_admin() && !$inline_frontend_css) {
             wp_enqueue_style(
                 'ekwa-video-block-frontend',
                 EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/css/frontend.css',
