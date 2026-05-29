@@ -3,7 +3,7 @@
  * Plugin Name: Ekwa Video Block
  * Plugin URI: https://www.ekwa.com
  * Description: A Gutenberg block for embedding YouTube and Vimeo videos with lazy loading and custom thumbnails
- * Version: 1.6.1
+ * Version: 1.6.3
  * Author: Ekwa Team
  * Author URI: https://www.ekwa.com
  * Text Domain: ekwa-video-block
@@ -29,6 +29,44 @@ $myUpdateChecker = PucFactory::buildUpdateChecker(
 	__FILE__,
 	'ekwa-video-block'
 );
+
+/*
+ * Authenticate GitHub API requests. Unauthenticated requests are limited to
+ * 60/hour per server IP; an authenticated token raises this to 5,000/hour.
+ * The token can be defined in wp-config.php (preferred, keeps it out of the DB)
+ * or saved on the plugin settings page.
+ */
+$ekwa_github_token = defined('EKWA_VIDEO_GITHUB_TOKEN')
+	? EKWA_VIDEO_GITHUB_TOKEN
+	: get_option('ekwa_video_github_token', '');
+if (!empty($ekwa_github_token)) {
+	$myUpdateChecker->setAuthentication($ekwa_github_token);
+}
+
+/*
+ * Detect when the GitHub API rate limit is exhausted. PUC fires this action
+ * whenever an update check fails. We store the reset timestamp so the admin
+ * page can tell the user when it is safe to check again.
+ */
+add_action('puc_api_error', 'ekwa_video_handle_puc_api_error', 10, 4);
+function ekwa_video_handle_puc_api_error($error, $httpResponse = null, $url = null, $slug = null) {
+	if ($slug !== 'ekwa-video-block' || empty($httpResponse) || is_wp_error($httpResponse)) {
+		return;
+	}
+
+	$code      = (int) wp_remote_retrieve_response_code($httpResponse);
+	$remaining = wp_remote_retrieve_header($httpResponse, 'x-ratelimit-remaining');
+	$reset     = wp_remote_retrieve_header($httpResponse, 'x-ratelimit-reset');
+
+	// GitHub returns 403 (or 429) with x-ratelimit-remaining: 0 when exhausted.
+	if (($code === 403 || $code === 429) && $remaining === '0') {
+		update_option('ekwa_video_gh_rate_limited', array(
+			'reset'        => (int) $reset, // Unix timestamp when the limit resets
+			'detected'     => time(),
+			'authenticated' => (bool) (defined('EKWA_VIDEO_GITHUB_TOKEN') ? EKWA_VIDEO_GITHUB_TOKEN : get_option('ekwa_video_github_token', '')),
+		), false);
+	}
+}
 
     
 // Define plugin constants
@@ -1599,6 +1637,10 @@ class EkwaVideoBlock {
             'sanitize_callback' => $sanitize_bool,
             'default' => 1,
         ));
+        register_setting('ekwa_video_block_settings', 'ekwa_video_github_token', array(
+            'sanitize_callback' => 'sanitize_text_field',
+            'default' => '',
+        ));
 
         add_settings_section(
             'ekwa_video_block_main',
@@ -1676,6 +1718,53 @@ class EkwaVideoBlock {
             'ekwa-video-block',
             'ekwa_video_block_performance'
         );
+
+        add_settings_section(
+            'ekwa_video_block_updates',
+            'Plugin Updates',
+            array($this, 'updates_section_callback'),
+            'ekwa-video-block'
+        );
+
+        add_settings_field(
+            'ekwa_video_github_token',
+            'GitHub Access Token',
+            array($this, 'github_token_callback'),
+            'ekwa-video-block',
+            'ekwa_video_block_updates'
+        );
+    }
+
+    /**
+     * Plugin Updates section callback
+     */
+    public function updates_section_callback() {
+        echo '<p>This plugin checks GitHub for updates. Unauthenticated requests are limited by GitHub to <strong>60 per hour per server IP</strong>. Adding a personal access token raises this to <strong>5,000 per hour</strong> and prevents the update check from being rate-limited.</p>';
+        echo '<p><strong>How to create a token:</strong></p>';
+        echo '<ol>';
+        echo '<li>Go to <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">GitHub &rarr; Settings &rarr; Developer settings &rarr; Fine-grained tokens</a></li>';
+        echo '<li>Give it read-only access to <strong>Contents</strong> for the plugin repository</li>';
+        echo '<li>Copy the token and paste it below</li>';
+        echo '</ol>';
+        echo '<p><em>For better security you can instead define <code>EKWA_VIDEO_GITHUB_TOKEN</code> in <code>wp-config.php</code>; if defined, it overrides this field.</em></p>';
+    }
+
+    /**
+     * GitHub token field callback
+     */
+    public function github_token_callback() {
+        $defined = defined('EKWA_VIDEO_GITHUB_TOKEN') && EKWA_VIDEO_GITHUB_TOKEN;
+        if ($defined) {
+            echo '<p><strong>' . esc_html__('A token is defined in wp-config.php and is being used.', 'ekwa-video-block') . '</strong> ';
+            echo esc_html__('Remove the constant from wp-config.php to manage the token here instead.', 'ekwa-video-block') . '</p>';
+            return;
+        }
+
+        $token = get_option('ekwa_video_github_token', '');
+        // Show a masked placeholder rather than echoing the stored token.
+        $display = $token ? str_repeat('•', 8) . substr($token, -4) : '';
+        echo '<input type="password" id="ekwa_video_github_token" name="ekwa_video_github_token" value="' . esc_attr($token) . '" class="regular-text" autocomplete="off" placeholder="' . esc_attr($display) . '" />';
+        echo '<p class="description">' . esc_html__('Optional. Leave empty to use unauthenticated checks (60/hour limit).', 'ekwa-video-block') . '</p>';
     }
 
     /**
@@ -1792,6 +1881,45 @@ class EkwaVideoBlock {
     }
 
     /**
+     * Show a notice if the GitHub API update check is currently rate-limited.
+     */
+    public function render_rate_limit_notice() {
+        $state = get_option('ekwa_video_gh_rate_limited', false);
+        if (empty($state) || empty($state['reset'])) {
+            return;
+        }
+
+        $reset = (int) $state['reset'];
+
+        // Limit has reset — clear the stored state and stop showing the notice.
+        if ($reset <= time()) {
+            delete_option('ekwa_video_gh_rate_limited');
+            return;
+        }
+
+        $human = human_time_diff(time(), $reset);
+        $when  = wp_date(get_option('time_format', 'H:i'), $reset);
+        ?>
+        <div class="notice notice-warning">
+            <p>
+                <strong><?php esc_html_e('Plugin update check is rate-limited by GitHub.', 'ekwa-video-block'); ?></strong>
+                <?php
+                printf(
+                    /* translators: 1: relative time, 2: clock time */
+                    esc_html__('The hourly request limit is exhausted. It resets in about %1$s (around %2$s). Update checks will resume automatically after that.', 'ekwa-video-block'),
+                    esc_html($human),
+                    esc_html($when)
+                );
+                ?>
+            </p>
+            <?php if (empty($state['authenticated'])): ?>
+                <p><?php esc_html_e('Tip: add a GitHub Access Token under "Plugin Updates" below to raise the limit from 60 to 5,000 requests per hour.', 'ekwa-video-block'); ?></p>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+
+    /**
      * Admin page
      */
     public function admin_page() {
@@ -1804,6 +1932,8 @@ class EkwaVideoBlock {
                     <p><strong><?php esc_html_e('Settings saved successfully!', 'ekwa-video-block'); ?></strong></p>
                 </div>
             <?php endif; ?>
+
+            <?php $this->render_rate_limit_notice(); ?>
 
             <form method="post" action="options.php">
                 <?php
