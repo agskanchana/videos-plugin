@@ -3,7 +3,7 @@
  * Plugin Name: Ekwa Video Block
  * Plugin URI: https://www.ekwa.com
  * Description: A Gutenberg block for embedding YouTube and Vimeo videos with lazy loading and custom thumbnails
- * Version: 1.6.0
+ * Version: 1.6.1
  * Author: Ekwa Team
  * Author URI: https://www.ekwa.com
  * Text Domain: ekwa-video-block
@@ -366,7 +366,7 @@ class EkwaVideoBlock {
         self::$has_video_blocks = true;
 
         // If we're past wp_head and CSS hasn't been inlined yet, add it inline here
-        if (did_action('wp_head') && !did_action('wp_footer')) {
+        if (did_action('wp_head') && !did_action('wp_footer') && get_option('ekwa_video_inline_frontend_css', true)) {
             static $css_already_output = false;
             if (!$css_already_output) {
                 echo $this->get_inline_css_output();
@@ -1292,6 +1292,11 @@ class EkwaVideoBlock {
             return;
         }
 
+        // Respect the "Inline frontend.css" setting
+        if (!get_option('ekwa_video_inline_frontend_css', true)) {
+            return;
+        }
+
         echo $this->get_inline_css_output();
     }
 
@@ -1346,9 +1351,12 @@ class EkwaVideoBlock {
      * Enqueue frontend assets
      */
     public function enqueue_frontend_assets() {
-        // Don't enqueue CSS file since we're inlining it
-        // Only enqueue if we absolutely need to fall back
-        if (!self::$has_video_blocks && !is_admin()) {
+        // When inlining is enabled (default), don't enqueue the CSS file except as
+        // a fallback for pages where no video blocks have been detected yet.
+        // When inlining is disabled, always load frontend.css as a separate file.
+        $inline_frontend_css = (bool) get_option('ekwa_video_inline_frontend_css', true);
+
+        if (!is_admin() && (!$inline_frontend_css || !self::$has_video_blocks)) {
             wp_enqueue_style(
                 'ekwa-video-block-frontend',
                 EKWA_VIDEO_BLOCK_PLUGIN_URL . 'assets/css/frontend.css',
@@ -1587,6 +1595,10 @@ class EkwaVideoBlock {
             'sanitize_callback' => $sanitize_bool,
             'default' => 0,
         ));
+        register_setting('ekwa_video_block_settings', 'ekwa_video_inline_frontend_css', array(
+            'sanitize_callback' => $sanitize_bool,
+            'default' => 1,
+        ));
 
         add_settings_section(
             'ekwa_video_block_main',
@@ -1653,6 +1665,14 @@ class EkwaVideoBlock {
             'ekwa_video_inline_frontend_js',
             'Inline frontend.js',
             array($this, 'inline_frontend_js_callback'),
+            'ekwa-video-block',
+            'ekwa_video_block_performance'
+        );
+
+        add_settings_field(
+            'ekwa_video_inline_frontend_css',
+            'Inline frontend.css',
+            array($this, 'inline_frontend_css_callback'),
             'ekwa-video-block',
             'ekwa_video_block_performance'
         );
@@ -1758,6 +1778,17 @@ class EkwaVideoBlock {
         echo '<input type="checkbox" id="ekwa_video_inline_frontend_js" name="ekwa_video_inline_frontend_js" value="1" ' . checked(1, $enabled, false) . ' />';
         echo '<label for="ekwa_video_inline_frontend_js">Embed frontend.js inside the page instead of loading it as a separate file</label>';
         echo '<p class="description">Removes one HTTP request. Adds ~60&nbsp;KB (uncompressed; ~15&nbsp;KB gzipped) to the page HTML. Combine with &ldquo;Defer scripts until user interaction&rdquo; for best results &mdash; the inlined code only runs after the first interaction.</p>';
+    }
+
+    /**
+     * "Inline frontend.css" field callback
+     */
+    public function inline_frontend_css_callback() {
+        $enabled = get_option('ekwa_video_inline_frontend_css', true);
+        echo '<input type="hidden" name="ekwa_video_inline_frontend_css" value="0" />';
+        echo '<input type="checkbox" id="ekwa_video_inline_frontend_css" name="ekwa_video_inline_frontend_css" value="1" ' . checked(1, $enabled, false) . ' />';
+        echo '<label for="ekwa_video_inline_frontend_css">Embed frontend.css inside the page instead of loading it as a separate file</label>';
+        echo '<p class="description">Recommended (default on). Inlines the critical CSS in the page head to avoid render-blocking and layout shift. Turn this off to load <code>frontend.css</code> as a normal stylesheet (cacheable separate file).</p>';
     }
 
     /**

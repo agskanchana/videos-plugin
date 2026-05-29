@@ -15,6 +15,7 @@ $options = array(
     'ekwa_video_lazysizes_load_script',
     'ekwa_video_defer_until_interaction',
     'ekwa_video_inline_frontend_js',
+    'ekwa_video_inline_frontend_css',
 );
 
 foreach ($options as $option) {
