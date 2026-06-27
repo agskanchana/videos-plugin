@@ -3,7 +3,7 @@
  * Plugin Name: Ekwa Video Block
  * Plugin URI: https://www.ekwa.com
  * Description: A Gutenberg block for embedding YouTube and Vimeo videos with lazy loading and custom thumbnails
- * Version: 1.6.3
+ * Version: 1.6.4
  * Author: Ekwa Team
  * Author URI: https://www.ekwa.com
  * Text Domain: ekwa-video-block
@@ -246,6 +246,14 @@ class EkwaVideoBlock {
                     'type' => 'boolean',
                     'default' => false,
                 ),
+                'disableLazyLoad' => array(
+                    'type' => 'boolean',
+                    'default' => false,
+                ),
+                'fetchPriorityHigh' => array(
+                    'type' => 'boolean',
+                    'default' => false,
+                ),
                 'className' => array(
                     'type' => 'string',
                     'default' => '',
@@ -281,6 +289,8 @@ class EkwaVideoBlock {
         $show_transcript = isset($attributes['showTranscript']) ? $attributes['showTranscript'] : false;
         $manual_info = isset($attributes['manualInfo']) ? $attributes['manualInfo'] : false;
         $open_in_lightbox = isset($attributes['openInLightbox']) ? $attributes['openInLightbox'] : false;
+        $disable_lazy_load = isset($attributes['disableLazyLoad']) ? $attributes['disableLazyLoad'] : false;
+        $fetch_priority_high = isset($attributes['fetchPriorityHigh']) ? $attributes['fetchPriorityHigh'] : false;
         $class_name = isset($attributes['className']) ? $attributes['className'] : '';
 
         // Build shortcode attributes
@@ -300,6 +310,8 @@ class EkwaVideoBlock {
             'show_transcript' => $show_transcript ? 'true' : 'false',
             'manual_info' => $manual_info ? 'true' : 'false',
             'open_in_lightbox' => $open_in_lightbox ? 'true' : 'false',
+            'disable_lazy_load' => $disable_lazy_load ? 'true' : 'false',
+            'fetch_priority_high' => $fetch_priority_high ? 'true' : 'false',
             'class_name' => $class_name,
         );
 
@@ -342,6 +354,8 @@ class EkwaVideoBlock {
             'show_transcript' => 'false',
             'manual_info' => 'false',
             'open_in_lightbox' => 'false',
+            'disable_lazy_load' => 'false',
+            'fetch_priority_high' => 'false',
             'class_name' => '',
         ), $atts, 'ekwa_video');
 
@@ -456,7 +470,7 @@ class EkwaVideoBlock {
                        data-video-id="<?php echo esc_attr($attributes['video_id']); ?>">
                         <?php if (!empty($thumbnail_url)):
                             $thumb_dimensions = $this->get_thumbnail_dimensions($thumbnail_url, $attributes['video_type'], $attributes['custom_thumbnail']);
-                            echo $this->render_thumbnail_inner($thumbnail_url, $thumbnail_alt, $thumb_dimensions, $attributes['video_duration']);
+                            echo $this->render_thumbnail_inner($thumbnail_url, $thumbnail_alt, $thumb_dimensions, $attributes['video_duration'], $attributes['disable_lazy_load'] === 'true', $attributes['fetch_priority_high'] === 'true');
                         else: ?>
                             <div class="ekwa-video-placeholder">
                                 <p><?php _e('Video thumbnail not available', 'ekwa-video-block'); ?></p>
@@ -479,7 +493,7 @@ class EkwaVideoBlock {
                                     data-embed-url="<?php echo esc_attr($attributes['embed_url']); ?>"
                                     data-aspect-ratio="<?php echo esc_attr($aspect_ratio); ?>"
                                     aria-label="<?php echo esc_attr($play_label); ?>">
-                                <?php echo $this->render_thumbnail_inner($thumbnail_url, $thumbnail_alt, $thumb_dimensions, $attributes['video_duration']); ?>
+                                <?php echo $this->render_thumbnail_inner($thumbnail_url, $thumbnail_alt, $thumb_dimensions, $attributes['video_duration'], $attributes['disable_lazy_load'] === 'true', $attributes['fetch_priority_high'] === 'true'); ?>
                             </button>
                         <?php else: ?>
                             <div class="ekwa-video-placeholder">
@@ -1131,15 +1145,22 @@ class EkwaVideoBlock {
      * Render the inner thumbnail markup (img + play icon + duration badge).
      * Shared by the lightbox and inline-player branches so they cannot drift apart.
      */
-    private function render_thumbnail_inner($thumbnail_url, $thumbnail_alt, $thumb_dimensions, $video_duration) {
-        $use_lazysizes = $this->should_use_lazysizes();
-        $img_src_attr = $use_lazysizes ? 'data-src' : 'src';
+    private function render_thumbnail_inner($thumbnail_url, $thumbnail_alt, $thumb_dimensions, $video_duration, $disable_lazy_load = false, $fetch_priority_high = false) {
+        if ($disable_lazy_load) {
+            $use_lazysizes = false;
+            $img_src_attr = 'src';
+            $img_loading = '';
+        } else {
+            $use_lazysizes = $this->should_use_lazysizes();
+            $img_src_attr = $use_lazysizes ? 'data-src' : 'src';
+            $img_loading = $use_lazysizes ? '' : ' loading="lazy"';
+        }
         $img_classes = $use_lazysizes ? 'image-responsive ekwa-video-thumb-img lazyload' : 'image-responsive ekwa-video-thumb-img';
-        $img_loading = $use_lazysizes ? '' : ' loading="lazy"';
+        $img_fetch_priority = $fetch_priority_high ? ' fetchpriority="high"' : '';
 
         ob_start();
         ?>
-        <img decoding="async"<?php echo $img_loading; ?>
+        <img decoding="async"<?php echo $img_loading; ?><?php echo $img_fetch_priority; ?>
              class="<?php echo esc_attr($img_classes); ?>"
              <?php echo $img_src_attr; ?>="<?php echo esc_url($thumbnail_url); ?>"
              alt="<?php echo esc_attr($thumbnail_alt); ?>"

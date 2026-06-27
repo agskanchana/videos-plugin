@@ -100,6 +100,14 @@ registerBlockType('ekwa/video-block', {
             type: 'boolean',
             default: false,
         },
+        disableLazyLoad: {
+            type: 'boolean',
+            default: false,
+        },
+        fetchPriorityHigh: {
+            type: 'boolean',
+            default: false,
+        },
     },
 
     edit: function(props) {
@@ -121,6 +129,8 @@ registerBlockType('ekwa/video-block', {
             showTranscript,
             manualInfo,
             openInLightbox,
+            disableLazyLoad,
+            fetchPriorityHigh,
         } = attributes;
 
         const [isLoading, setIsLoading] = useState(false);
@@ -581,6 +591,22 @@ registerBlockType('ekwa/video-block', {
                         checked: openInLightbox,
                         onChange: function(value) { setAttributes({ openInLightbox: value }); },
                         help: __('Open video in a popup lightbox instead of inline player', 'ekwa-video-block')
+                    }),
+
+                    el(ToggleControl, {
+                        key: 'disable-lazy-load',
+                        label: __('Disable Lazy Loading', 'ekwa-video-block'),
+                        checked: disableLazyLoad,
+                        onChange: function(value) { setAttributes({ disableLazyLoad: value }); },
+                        help: __('Remove loading="lazy" from the thumbnail image. Use for above-the-fold videos to load immediately.', 'ekwa-video-block')
+                    }),
+
+                    el(ToggleControl, {
+                        key: 'fetch-priority-high',
+                        label: __('High Fetch Priority', 'ekwa-video-block'),
+                        checked: fetchPriorityHigh,
+                        onChange: function(value) { setAttributes({ fetchPriorityHigh: value }); },
+                        help: __('Add fetchpriority="high" to the thumbnail image. Helps the browser prioritize this image as the LCP element.', 'ekwa-video-block')
                     }),
 
                     el(ToggleControl, {
