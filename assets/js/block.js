@@ -464,7 +464,16 @@ registerBlockType('ekwa/video-block', {
                                 body: formData,
                             })
                             .then(function(response) {
-                                return response.json();
+                                return response.text().then(function(text) {
+                                    try {
+                                        return JSON.parse(text);
+                                    } catch (e) {
+                                        // Server returned HTML (e.g. a PHP fatal error page)
+                                        const plain = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                                        console.error('Cropped thumbnail upload - non-JSON response (HTTP ' + response.status + '):', text);
+                                        throw new Error('Server error (HTTP ' + response.status + '): ' + plain.substring(0, 300));
+                                    }
+                                });
                             })
                             .then(function(data) {
                                 if (data.success) {

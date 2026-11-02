@@ -3,7 +3,7 @@
  * Plugin Name: Ekwa Video Block
  * Plugin URI: https://www.ekwa.com
  * Description: A Gutenberg block for embedding YouTube and Vimeo videos with lazy loading and custom thumbnails
- * Version: 1.6.4
+ * Version: 1.6.5
  * Author: Ekwa Team
  * Author URI: https://www.ekwa.com
  * Text Domain: ekwa-video-block
@@ -2111,7 +2111,7 @@ function ekwa_upload_cropped_thumbnail_ajax() {
         return;
     }
 
-    $original_id = intval($_POST['original_id']);
+    $original_id = isset($_POST['original_id']) ? intval($_POST['original_id']) : 0;
     $file = $_FILES['cropped_image'];
 
     // Validate file
@@ -2120,13 +2120,12 @@ function ekwa_upload_cropped_thumbnail_ajax() {
         return;
     }
 
-    // Check file type
-    $allowed_types = array('image/jpeg', 'image/jpg', 'image/png');
-    $finfo = finfo_open(FILEINFO_MIME_TYPE);
-    $mime_type = finfo_file($finfo, $file['tmp_name']);
-    finfo_close($finfo);
+    // Check file type. wp_get_image_mime() falls back to exif/getimagesize
+    // when the PHP fileinfo extension is unavailable (common on shared hosts).
+    $allowed_types = array('image/jpeg', 'image/png');
+    $mime_type = wp_get_image_mime($file['tmp_name']);
 
-    if (!in_array($mime_type, $allowed_types)) {
+    if (!$mime_type || !in_array($mime_type, $allowed_types, true)) {
         wp_send_json_error('Invalid file type. Only JPEG and PNG are allowed.');
         return;
     }
@@ -2138,38 +2137,36 @@ function ekwa_upload_cropped_thumbnail_ajax() {
         return;
     }
 
-    // Generate unique filename
-    $upload_dir = wp_upload_dir();
-    $original_filename = basename(get_attached_file($original_id));
-    $file_info = pathinfo($original_filename);
-    $new_filename = $file_info['filename'] . '-cropped-' . time() . '.jpg';
-    $new_file_path = $upload_dir['path'] . '/' . $new_filename;
+    // Build a filename based on the original image
+    $original_file = get_attached_file($original_id);
+    $base_name = $original_file ? pathinfo($original_file, PATHINFO_FILENAME) : 'thumbnail';
+    $extension = ($mime_type === 'image/png') ? 'png' : 'jpg';
+    $_FILES['cropped_image']['name'] = sanitize_file_name($base_name . '-cropped-' . time() . '.' . $extension);
 
-    // Move uploaded file
-    if (!move_uploaded_file($file['tmp_name'], $new_file_path)) {
-        wp_send_json_error('Failed to save cropped image');
+    require_once ABSPATH . 'wp-admin/includes/file.php';
+    require_once ABSPATH . 'wp-admin/includes/media.php';
+    require_once ABSPATH . 'wp-admin/includes/image.php';
+
+    try {
+        // Let WordPress handle moving the file, creating the attachment and generating sizes
+        $attachment_id = media_handle_upload(
+            'cropped_image',
+            0,
+            array(
+                'post_title'   => $original_attachment->post_title . ' (Cropped)',
+                'post_content' => '',
+            ),
+            array('test_form' => false)
+        );
+    } catch (\Throwable $e) {
+        wp_send_json_error('Failed to process cropped image: ' . $e->getMessage());
         return;
     }
-
-    // Create attachment
-    $attachment_data = array(
-        'post_mime_type' => 'image/jpeg',
-        'post_title' => $original_attachment->post_title . ' (Cropped)',
-        'post_content' => '',
-        'post_status' => 'inherit'
-    );
-
-    $attachment_id = wp_insert_attachment($attachment_data, $new_file_path);
 
     if (is_wp_error($attachment_id)) {
         wp_send_json_error('Failed to create attachment: ' . $attachment_id->get_error_message());
         return;
     }
-
-    // Generate attachment metadata
-    require_once(ABSPATH . 'wp-admin/includes/image.php');
-    $attachment_metadata = wp_generate_attachment_metadata($attachment_id, $new_file_path);
-    wp_update_attachment_metadata($attachment_id, $attachment_metadata);
 
     // Copy alt text and other metadata from original
     $alt_text = get_post_meta($original_id, '_wp_attachment_image_alt', true);
